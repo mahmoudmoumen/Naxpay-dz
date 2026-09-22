@@ -1,61 +1,44 @@
 workflows:
-  android-workflow:
+  android-build:
     name: NexaPay DZ Android
-    instance_type: mac_mini_m2
+    max_build_duration: 60
 
     environment:
-      java: 17
+      node: latest
 
     scripts:
       - name: Extract NexaPay project
         script: |
           set -e
 
-          echo "===== Searching for ZIP ====="
-          ZIP=$(find . -maxdepth 3 -type f -name "*.zip" | head -n 1)
+          rm -rf extracted
+          mkdir extracted
 
-          if [ -z "$ZIP" ]; then
-            echo "ERROR: ZIP file not found"
-            exit 1
-          fi
+          unzip -o NaxaAdmin_Android_Compatible_FIXED.zip -d extracted
 
-          echo "Found ZIP: $ZIP"
-
-          mkdir -p extracted
-          unzip -o "$ZIP" -d extracted
-
-          echo "===== Searching for package.json ====="
-          PACKAGE=$(find extracted -type f -name "package.json" | head -n 1)
-
-          if [ -z "$PACKAGE" ]; then
-            echo "ERROR: package.json not found inside ZIP"
-            echo "===== ZIP CONTENTS ====="
-            find extracted -maxdepth 5 -type f | head -200
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$PACKAGE")
-
-          echo "Project directory: $PROJECT_DIR"
-
-          cd "$PROJECT_DIR"
+          cd extracted
 
           echo "===== PROJECT FILES ====="
           ls -la
 
-          echo "===== Installing dependencies ====="
+          test -f package.json
+          test -d android
+
+      - name: Install dependencies
+        script: |
+          set -e
+          cd extracted
           npm install
 
-          echo "===== Preparing Capacitor Android ====="
-          npx cap sync android
-
-          echo "===== Building Android APK ====="
-          cd android
+      - name: Build Android APK
+        script: |
+          set -e
+          cd extracted/android
 
           chmod +x gradlew
 
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --stacktrace
 
     artifacts:
-      - extracted/**/android/app/build/outputs/apk/release/*.apk
-      - extracted/**/android/app/build/outputs/apk/release/*.aab
+      - extracted/android/app/build/outputs/**/*.apk
+      - extracted/android/app/build/outputs/**/*.aab
