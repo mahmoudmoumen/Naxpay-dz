@@ -1,33 +1,92 @@
+
 workflows:
-  nexapay-android:
-    name: Android App Bundle
-    max_build_duration: 30
+  naxpay-android:
+    name: Naxpay DZ Android
+    max_build_duration: 120
     instance_type: mac_mini_m2
+
     environment:
-      java: 17
+      node: latest
+
     scripts:
-      - name: Install Dependencies
+
+      - name: Install dependencies
         script: |
+          set -e
           npm install
 
-      - name: Build Web Project
+      - name: Prepare Capacitor Android
         script: |
-          npm run build --if-present
+          set -e
 
-      - name: Add Android Platform & Sync Capacitor
-        script: |
-          npx cap add android || true
+          echo "===== Checking Capacitor ====="
+
+          if [ ! -f package.json ]; then
+            echo "ERROR: package.json not found"
+            exit 1
+          fi
+
+          # Install Capacitor if missing
+          if ! npm list @capacitor/core >/dev/null 2>&1; then
+            npm install @capacitor/core @capacitor/cli
+          fi
+
+          # Install Android platform if missing
+          if ! npm list @capacitor/android >/dev/null 2>&1; then
+            npm install @capacitor/android
+          fi
+
+          echo "===== Recreating Android platform ====="
+
+          # Remove incomplete Android folder that caused the Gradle error
+          rm -rf android
+
+          # Create a fresh Capacitor Android project
+          npx cap add android
+
+          # Copy the web application into Android
           npx cap sync android
 
-      - name: Generate Gradle Wrapper & Build AAB
+      - name: Fix Gradle Wrapper
         script: |
+          set -e
+
           cd android
-          npm run build --if-present || true
-          if [ ! -f "gradlew" ]; then
-            npx cap copy android
-          fi
-          chmod +x gradlew || true
-          ./gradlew bundleRelease
+
+          echo "===== Checking Gradle project ====="
+
+          test -f settings.gradle || \
+          test -f settings.gradle.kts || \
+          (echo "ERROR: Gradle settings file missing" && exit 1)
+
+          test -f build.gradle || \
+          test -f build.gradle.kts || \
+          (echo "ERROR: Gradle build file missing" && exit 1)
+
+          echo "===== Creating Gradle Wrapper ====="
+
+          gradle wrapper --gradle-version 8.9
+
+          chmod +x gradlew
+
+          echo "===== Gradle Wrapper ready ====="
+
+      - name: Set Android SDK
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+
+      - name: Build Android AAB
+        script: |
+          set -e
+
+          cd android
+
+          chmod +x gradlew
+
+          ./gradlew clean
+
+          ./gradlew bundleRelease --stacktrace
 
     artifacts:
-      - android/app/build/outputs/bundle/release/*.aab
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.apk
