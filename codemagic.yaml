@@ -31,10 +31,6 @@ workflows:
 
           cd extracted
 
-          echo "===== PROJECT ROOT ====="
-          pwd
-          ls -la
-
           echo "===== INSTALL CAPACITOR ====="
 
           npm install @capacitor/core @capacitor/cli @capacitor/android
@@ -47,13 +43,33 @@ workflows:
 
           npx cap sync android
 
-          echo "===== ANDROID BUILD.GRADLE ====="
+          echo "===== BUILD.GRADLE AROUND LINE 14 ====="
 
-          echo "----- FIRST 30 LINES -----"
+          echo "LINE 10:"
+          sed -n '10p' android/app/build.gradle
 
-          nl -ba android/app/build.gradle | sed -n '1,30p'
+          echo "LINE 11:"
+          sed -n '11p' android/app/build.gradle
 
-          echo "----- END BUILD.GRADLE -----"
+          echo "LINE 12:"
+          sed -n '12p' android/app/build.gradle
+
+          echo "LINE 13:"
+          sed -n '13p' android/app/build.gradle
+
+          echo "LINE 14:"
+          sed -n '14p' android/app/build.gradle
+
+          echo "LINE 15:"
+          sed -n '15p' android/app/build.gradle
+
+          echo "LINE 16:"
+          sed -n '16p' android/app/build.gradle
+
+          echo "LINE 17:"
+          sed -n '17p' android/app/build.gradle
+
+          echo "===== END CHECK ====="
 
           echo "===== BUILD APK ====="
 
