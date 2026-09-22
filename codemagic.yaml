@@ -1,27 +1,24 @@
+
 workflows:
   nexapay-android:
     name: Android App Bundle
     max_build_duration: 30
     instance_type: mac_mini_m2
+    environment:
+      java: 17
     scripts:
       - name: Install Dependencies
         script: |
           npm install
 
-      - name: Build Web Assets and Sync Capacitor
+      - name: Build Web Assets (If scripts exist)
         script: |
-          mkdir -p android/app/src/main/assets
-          cp -R www/* android/app/src/main/assets/ || true
-          npx cap add android || true
-          npx cap sync android
+          npm run build --if-present
 
-      - name: Setup Gradle Wrapper and Build AAB
+      - name: Build Android AAB
         script: |
           cd android
-          gradle wrapper
-          chmod +x gradlew
-          ./gradlew bundleRelease
+          gradle bundleRelease
 
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
-
