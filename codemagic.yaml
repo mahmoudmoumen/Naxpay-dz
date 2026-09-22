@@ -1,57 +1,55 @@
 workflows:
-  android-build:
-    name: NexaPay DZ Android Build
-    max_build_duration: 60
-
+  android-workflow:
+    name: NexaPay DZ Android
     environment:
+      vars:
+        PACKAGE_DIR: extracted
       flutter: stable
-      groups:
-        - nexapay_credentials
 
     scripts:
-      - name: Check project files
+      - name: Find project root
         script: |
-          echo "=== Current directory ==="
-          pwd
-          echo "=== Files ==="
-          ls -la
+          echo "=== Searching for package.json ==="
+          find . -name package.json -type f
           
-          if [ ! -f "package.json" ]; then
-            echo "ERROR: package.json not found"
-            echo "Searching for package.json..."
-            find . -name package.json -not -path "*/node_modules/*" -print
+          if [ -f "extracted/package.json" ]; then
+            cd extracted
+          elif [ -f "package.json" ]; then
+            echo "package.json already in root"
+          else
+            echo "ERROR: package.json not found anywhere"
+            exit 1
           fi
+          
+          echo "Project directory:"
+          pwd
+          ls -la
 
       - name: Install dependencies
         script: |
-          if [ -f package.json ]; then
-            npm install
-          else
-            echo "ERROR: package.json not found in project root"
-            exit 1
+          if [ -f "extracted/package.json" ]; then
+            cd extracted
           fi
+          
+          npm install
 
       - name: Prepare Capacitor Android
         script: |
-          if [ ! -d "node_modules" ]; then
-            echo "Installing npm dependencies..."
-            npm install
+          if [ -f "extracted/package.json" ]; then
+            cd extracted
           fi
-
-          if [ ! -d "android" ]; then
-            echo "Android folder not found."
-            echo "Preparing Capacitor Android..."
-            npx cap add android
-          fi
-
+          
           npx cap sync android
 
-      - name: Build Android APK
+      - name: Build Android
         script: |
+          if [ -f "extracted/package.json" ]; then
+            cd extracted
+          fi
+          
           cd android
-          chmod +x gradlew
           ./gradlew assembleRelease
 
     artifacts:
-      - android/app/build/outputs/**/*.apk
-      - android/app/build/outputs/**/*.aab
+      - extracted/android/app/build/outputs/**/*.apk
+      - extracted/android/app/build/outputs/**/*.aab
