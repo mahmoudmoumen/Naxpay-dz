@@ -1,55 +1,89 @@
+
 workflows:
-  android-workflow:
+  nexapay_android:
     name: NexaPay DZ Android
+    max_build_duration: 60
+
     environment:
-      vars:
-        PACKAGE_DIR: extracted
       flutter: stable
+      java: 17
 
     scripts:
-      - name: Find project root
+      - name: Extract NexaPay project
         script: |
-          echo "=== Searching for package.json ==="
-          find . -name package.json -type f
-          
-          if [ -f "extracted/package.json" ]; then
-            cd extracted
-          elif [ -f "package.json" ]; then
-            echo "package.json already in root"
-          else
-            echo "ERROR: package.json not found anywhere"
+          set -e
+
+          echo "=== Files in workspace ==="
+          ls -la
+
+          ZIP="NexaPay_DZ_CODEMAGIC_FIXED.zip"
+
+          if [ ! -f "$ZIP" ]; then
+            echo "ERROR: $ZIP not found"
+            echo "Available ZIP files:"
+            find . -maxdepth 3 -type f -iname "*.zip" -print
             exit 1
           fi
-          
-          echo "Project directory:"
-          pwd
-          ls -la
+
+          rm -rf extracted
+          mkdir -p extracted
+
+          unzip -q "$ZIP" -d extracted
+
+          echo "=== Searching for package.json ==="
+          find extracted -name package.json -type f -print
+
+          PROJECT_ROOT=$(dirname "$(find extracted -name package.json -type f -print -quit)")
+
+          if [ -z "$PROJECT_ROOT" ] || [ "$PROJECT_ROOT" = "extracted" ]; then
+            PROJECT_ROOT="extracted"
+          fi
+
+          echo "PROJECT_ROOT=$PROJECT_ROOT"
+          echo "$PROJECT_ROOT" > /tmp/nexapay_root
 
       - name: Install dependencies
         script: |
-          if [ -f "extracted/package.json" ]; then
-            cd extracted
-          fi
-          
+          set -e
+
+          PROJECT_ROOT=$(cat /tmp/nexapay_root)
+
+          echo "Using project root:"
+          echo "$PROJECT_ROOT"
+
+          cd "$PROJECT_ROOT"
+
+          echo "=== Project files ==="
+          ls -la
+
+          test -f package.json
+
           npm install
 
       - name: Prepare Capacitor Android
         script: |
-          if [ -f "extracted/package.json" ]; then
-            cd extracted
+          set -e
+
+          PROJECT_ROOT=$(cat /tmp/nexapay_root)
+          cd "$PROJECT_ROOT"
+
+          if [ -f node_modules/.bin/capacitor ]; then
+            npx cap sync android
+          else
+            echo "ERROR: Capacitor is not installed"
+            exit 1
           fi
-          
-          npx cap sync android
 
       - name: Build Android
         script: |
-          if [ -f "extracted/package.json" ]; then
-            cd extracted
-          fi
-          
-          cd android
-          ./gradlew assembleRelease
+          set -e
+
+          PROJECT_ROOT=$(cat /tmp/nexapay_root)
+          cd "$PROJECT_ROOT/android"
+
+          chmod +x gradlew
+          ./gradlew bundleRelease
 
     artifacts:
-      - extracted/android/app/build/outputs/**/*.apk
-      - extracted/android/app/build/outputs/**/*.aab
+      - extracted/**/android/app/build/outputs/**/*.aab
+      - extracted/**/android/app/build/outputs/**/*.apk
