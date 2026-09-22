@@ -1,29 +1,26 @@
 
 workflows:
-  nexapay-android-release:
-    name: Google Play AAB
+  nexapay-android:
+    name: Android App Bundle (Google Play)
     max_build_duration: 30
     instance_type: mac_mini_m2
-
     environment:
-      groups:
-        - npm_dependencies
-
+      node: latest
     scripts:
       - name: Install npm dependencies
         script: |
           npm install
 
-      - name: NexaPay web assets
+      - name: Copy Web Assets
         script: |
-          mkdir -p android/app/src/main/assets/public
-          cp -R ./* android/app/src/main/assets/public/
+          mkdir -p android/app/src/main/assets
+          cp -R ./* android/app/src/main/assets/ || true
 
-      - name: Android App Bundle
+      - name: Build Android App Bundle
         script: |
           cd android
           chmod +x gradlew
           ./gradlew --stacktrace bundleRelease
 
     artifacts:
-      - android/app/build/outputs/bundle/release/app-release.aab
+      - android/app/build/outputs/bundle/release/*.aab
