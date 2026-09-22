@@ -78,7 +78,7 @@ workflows:
 
           if "compileOptions" not in text:
               text += """
-          
+
           android {
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -95,6 +95,70 @@ workflows:
           print("Java/Kotlin JVM target set to 17")
           PY
 
+          echo "===== CONFIGURE ANDROID SIGNING ====="
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          file = Path("android/app/build.gradle")
+          text = file.read_text()
+
+          signing_block = """
+          
+          signingConfigs {
+              release {
+                  if (System.getenv()["CI"]) {
+                      storeFile file(System.getenv()["CM_KEYSTORE_PATH"])
+                      storePassword System.getenv()["CM_KEYSTORE_PASSWORD"]
+                      keyAlias System.getenv()["CM_KEY_ALIAS"]
+                      keyPassword System.getenv()["CM_KEY_PASSWORD"]
+                  }
+              }
+          }
+          """
+
+          if "signingConfigs {" not in text:
+              marker = "android {"
+              pos = text.find(marker)
+
+              if pos == -1:
+                  raise SystemExit("ERROR: android block not found")
+
+              insert_pos = pos + len(marker)
+              text = text[:insert_pos] + signing_block + text[insert_pos:]
+
+          if "signingConfig signingConfigs.release" not in text:
+              marker = "buildTypes {"
+              pos = text.find(marker)
+
+              if pos == -1:
+                  raise SystemExit("ERROR: buildTypes block not found")
+
+              release_pos = text.find("release {", pos)
+
+              if release_pos == -1:
+                  raise SystemExit("ERROR: release build type not found")
+
+              insert_pos = release_pos + len("release {")
+
+              text = (
+                  text[:insert_pos]
+                  + """
+                  signingConfig signingConfigs.release
+                  """
+                  + text[insert_pos:]
+              )
+
+          file.write_text(text)
+          print("Release signing configured successfully")
+          PY
+
+          echo "===== VERIFY SIGNING CONFIGURATION ====="
+
+          grep -n "signingConfigs" android/app/build.gradle
+          grep -n "signingConfig signingConfigs.release" android/app/build.gradle
+          grep -n "CM_KEYSTORE_PATH" android/app/build.gradle
+
           echo "===== BUILD SIGNED APK ====="
 
           cd android
@@ -107,7 +171,7 @@ workflows:
 
           ./gradlew bundleRelease
 
-          echo "===== OUTPUT FILES ====="
+          echo "===== VERIFY OUTPUT FILES ====="
 
           find app/build/outputs -type f \( -name "*.apk" -o -name "*.aab" \) -print
 
