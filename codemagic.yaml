@@ -8,21 +8,20 @@ workflows:
         script: |
           npm install
 
-      - name: Build Web Assets and Sync
+      - name: Build Web Assets and Sync Capacitor
         script: |
           mkdir -p android/app/src/main/assets
           cp -R www/* android/app/src/main/assets/ || true
-          npx cap sync android || true
+          npx cap add android || true
+          npx cap sync android
 
       - name: Setup Gradle Wrapper and Build AAB
         script: |
           cd android
-          if [ ! -f "gradlew" ]; then
-            echo "gradlew not found, generating wrapper..."
-            gradle wrapper
-          fi
+          gradle wrapper
           chmod +x gradlew
-          ./gradlew --stacktrace bundleRelease
+          ./gradlew bundleRelease
 
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
+
