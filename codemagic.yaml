@@ -1,93 +1,28 @@
-
 workflows:
-  nexapay-android:
-    name: NexaPay Android Build
+  nexapay-android-release:
+    name: Google Play AAB
     max_build_duration: 30
-    instance_type: mac_mini_m2
+    instance_type: linux_x2
+
+    environment:
+      groups:
+        - npm_dependencies
 
     scripts:
-      - name: Build NexaPay APK
+      - name: Install npm dependencies
         script: |
-          #!/bin/bash
-          set -e
+          npm install
 
-          echo "======================================"
-          echo "        NexaPay Android Build"
-          echo "======================================"
+      - name: NexaPay web assets
+        script: |
+          mkdir -p android/app/src/main/assets/public
+          cp -R ./* android/app/src/main/assets/public/
 
-          BUILD_DIR="$CM_BUILD_DIR"
-          EXTRACT_DIR="$BUILD_DIR/extracted"
-          OUTPUT_DIR="$BUILD_DIR/apk"
-
-          rm -rf "$EXTRACT_DIR"
-          rm -rf "$OUTPUT_DIR"
-
-          mkdir -p "$EXTRACT_DIR"
-          mkdir -p "$OUTPUT_DIR"
-
-          echo "1. البحث عن ملف ZIP..."
-
-          ZIP_FILE=$(find "$BUILD_DIR" -type f \( -iname "*.zip" -o -iname "*.ZIP" \) | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "❌ لم يتم العثور على ملف ZIP"
-            exit 1
-          fi
-
-          echo "✅ الملف:"
-          echo "$ZIP_FILE"
-
-          echo "2. استخراج المشروع..."
-
-          unzip -o "$ZIP_FILE" -d "$EXTRACT_DIR"
-
-          echo "3. البحث عن مشروع Android..."
-
-          GRADLEW=$(find "$EXTRACT_DIR" -type f -name "gradlew" -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "❌ لم يتم العثور على gradlew"
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$GRADLEW")
-
-          echo "✅ المشروع موجود في:"
-          echo "$PROJECT_DIR"
-
-          cd "$PROJECT_DIR"
-
-          echo "4. إعطاء صلاحية التنفيذ لـ gradlew..."
-
-          chmod +x ./gradlew
-
-          echo "5. تنظيف المشروع..."
-
-          ./gradlew clean
-
-          echo "6. بناء تطبيق NexaPay..."
-
-          ./gradlew assembleDebug --stacktrace
-
-          echo "7. البحث عن APK..."
-
-          APK_FILE=$(find "$PROJECT_DIR" -type f -name "*.apk" -print -quit)
-
-          if [ -z "$APK_FILE" ]; then
-            echo "❌ لم يتم إنشاء APK"
-            exit 1
-          fi
-
-          echo "✅ تم العثور على APK:"
-          echo "$APK_FILE"
-
-          cp "$APK_FILE" "$OUTPUT_DIR/NexaPay.apk"
-
-          echo "======================================"
-          echo "       تم بناء NexaPay بنجاح"
-          echo "======================================"
-
-          ls -lh "$OUTPUT_DIR/NexaPay.apk"
+      - name: Android App Bundle
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew --stacktrace bundleRelease
 
     artifacts:
-      - apk/NexaPay.apk
+      - android/app/build/outputs/bundle/release/app-release.aab
