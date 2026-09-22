@@ -2,55 +2,64 @@ workflows:
   nexapay_android:
     name: NexaPay Android
 
+    environment:
+      node: 20
+      java: 17
+
     scripts:
       - name: Extract project ZIP
         script: |
           set -e
 
-          echo "===== START ====="
-          pwd
-          ls -la
-
-          echo "===== FIND ZIP ====="
-
           ZIP_FILE=$(find . -maxdepth 2 -type f -name "NexaPay_DZ_CODEMAGIC_FIXED.zip" | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: NexaPay_DZ_CODEMAGIC_FIXED.zip not found"
+            echo "ERROR: ZIP file not found"
             exit 1
           fi
 
-          echo "ZIP FOUND:"
-          echo "$ZIP_FILE"
-
-          echo "===== EXTRACT ZIP ====="
+          echo "ZIP: $ZIP_FILE"
 
           rm -rf extracted
           mkdir -p extracted
 
           unzip -o "$ZIP_FILE" -d extracted
 
-          echo "===== SEARCH PACKAGE.JSON ====="
-
-          PACKAGE=$(find extracted -type f -name "package.json" -not -path "*/node_modules/*" | head -n 1)
+          PACKAGE=$(find extracted -type f -name "package.json" \
+            -not -path "*/node_modules/*" | head -n 1)
 
           if [ -z "$PACKAGE" ]; then
-            echo "ERROR: package.json not found inside ZIP"
-            echo "===== EXTRACTED FILES ====="
-            find extracted -maxdepth 5 -type f | sort
+            echo "ERROR: package.json not found"
             exit 1
           fi
 
-          echo "===== PACKAGE.JSON FOUND ====="
-          echo "$PACKAGE"
-
           ROOT=$(dirname "$PACKAGE")
 
-          echo "===== ROOT ====="
-          echo "$ROOT"
+          echo "PROJECT ROOT: $ROOT"
 
           cd "$ROOT"
 
-          echo "===== PROJECT ROOT CONFIRMED ====="
-          pwd
-          ls -la
+          echo "===== INSTALL NPM ====="
+          npm install
+
+          echo "===== CHECK CAPACITOR ====="
+          npx cap --version
+
+          echo "===== ANDROID ====="
+
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+
+          echo "===== CAPACITOR SYNC ====="
+          npx cap sync android
+
+          echo "===== BUILD APK ====="
+          cd android
+
+          chmod +x gradlew
+
+          ./gradlew assembleRelease
+
+    artifacts:
+      - "extracted/**/android/app/build/outputs/apk/release/*.apk"
