@@ -1,4 +1,3 @@
-
 workflows:
   nexapay_android:
     name: NexaPay Android
@@ -23,7 +22,7 @@ workflows:
 
           echo "ZIP FOUND: $ZIP_FILE"
 
-          echo "===== EXTRACT ====="
+          echo "===== EXTRACT ZIP ====="
 
           rm -rf extracted
           mkdir -p extracted
@@ -36,9 +35,6 @@ workflows:
           pwd
           ls -la
 
-          echo "===== PACKAGE.JSON ====="
-          cat package.json
-
           echo "===== INSTALL CAPACITOR ====="
 
           npm install @capacitor/core @capacitor/cli @capacitor/android
@@ -50,6 +46,14 @@ workflows:
           echo "===== CAPACITOR SYNC ====="
 
           npx cap sync android
+
+          echo "===== ANDROID BUILD.GRADLE ====="
+
+          echo "----- FIRST 30 LINES -----"
+
+          nl -ba android/app/build.gradle | sed -n '1,30p'
+
+          echo "----- END BUILD.GRADLE -----"
 
           echo "===== BUILD APK ====="
 
