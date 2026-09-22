@@ -1,92 +1,55 @@
 
 workflows:
-  naxpay-android:
-    name: Naxpay DZ Android
-    max_build_duration: 120
-    instance_type: mac_mini_m2
+  nexapay-android:
+    name: NexaPay DZ Android
+    max_build_duration: 60
 
     environment:
-      node: latest
+      node: 20
+      java: 17
 
     scripts:
-
-      - name: Install dependencies
-        script: |
-          set -e
-          npm install
-
-      - name: Prepare Capacitor Android
+      - name: Find project and Prepare Capacitor Android
         script: |
           set -e
 
-          echo "===== Checking Capacitor ====="
+          echo "===== Searching for package.json ====="
 
-          if [ ! -f package.json ]; then
-            echo "ERROR: package.json not found"
+          PACKAGE_JSON=$(find . -name package.json -not -path "*/node_modules/*" -print -quit)
+
+          if [ -z "$PACKAGE_JSON" ]; then
+            echo "ERROR: package.json not found anywhere in repository"
             exit 1
           fi
 
-          # Install Capacitor if missing
-          if ! npm list @capacitor/core >/dev/null 2>&1; then
-            npm install @capacitor/core @capacitor/cli
-          fi
+          PROJECT_DIR=$(dirname "$PACKAGE_JSON")
 
-          # Install Android platform if missing
-          if ! npm list @capacitor/android >/dev/null 2>&1; then
-            npm install @capacitor/android
-          fi
+          echo "Found package.json: $PACKAGE_JSON"
+          echo "Project directory: $PROJECT_DIR"
 
-          echo "===== Recreating Android platform ====="
+          cd "$PROJECT_DIR"
 
-          # Remove incomplete Android folder that caused the Gradle error
-          rm -rf android
+          echo "===== Installing dependencies ====="
+          npm install
 
-          # Create a fresh Capacitor Android project
-          npx cap add android
+          echo "===== Checking Capacitor ====="
+          npx cap --version
 
-          # Copy the web application into Android
+          echo "===== Preparing Android ====="
           npx cap sync android
 
-      - name: Fix Gradle Wrapper
+      - name: Build Android APK
         script: |
           set -e
 
-          cd android
+          PACKAGE_JSON=$(find . -name package.json -not -path "*/node_modules/*" -print -quit)
+          PROJECT_DIR=$(dirname "$PACKAGE_JSON")
 
-          echo "===== Checking Gradle project ====="
-
-          test -f settings.gradle || \
-          test -f settings.gradle.kts || \
-          (echo "ERROR: Gradle settings file missing" && exit 1)
-
-          test -f build.gradle || \
-          test -f build.gradle.kts || \
-          (echo "ERROR: Gradle build file missing" && exit 1)
-
-          echo "===== Creating Gradle Wrapper ====="
-
-          gradle wrapper --gradle-version 8.9
+          cd "$PROJECT_DIR/android"
 
           chmod +x gradlew
-
-          echo "===== Gradle Wrapper ready ====="
-
-      - name: Set Android SDK
-        script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
-
-      - name: Build Android AAB
-        script: |
-          set -e
-
-          cd android
-
-          chmod +x gradlew
-
-          ./gradlew clean
-
-          ./gradlew bundleRelease --stacktrace
+          ./gradlew assembleRelease
 
     artifacts:
-      - android/app/build/outputs/**/*.aab
-      - android/app/build/outputs/**/*.apk
+      - "**/android/app/build/outputs/**/*.apk"
+      - "**/android/app/build/outputs/**/*.aab"
