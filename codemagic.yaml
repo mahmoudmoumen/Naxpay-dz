@@ -7,7 +7,7 @@ workflows:
       java: 17
 
     scripts:
-      - name: Build NexaPay Android
+      - name: Inspect build.gradle
         script: |
           set -e
 
@@ -35,53 +35,27 @@ workflows:
 
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
-          echo "===== CAPACITOR VERSION ====="
-
-          npx cap --version
-
           echo "===== CAPACITOR SYNC ====="
 
           npx cap sync android
 
-          echo "===== BUILD.GRADLE AROUND LINE 14 ====="
+          echo ""
+          echo "========================================"
+          echo " BUILD.GRADLE LINES 1 TO 25"
+          echo "========================================"
 
-          echo "LINE 10:"
-          sed -n '10p' android/app/build.gradle
+          nl -ba android/app/build.gradle | sed -n '1,25p'
 
-          echo "LINE 11:"
-          sed -n '11p' android/app/build.gradle
+          echo ""
+          echo "========================================"
+          echo " LINE 14 ONLY"
+          echo "========================================"
 
-          echo "LINE 12:"
-          sed -n '12p' android/app/build.gradle
-
-          echo "LINE 13:"
-          sed -n '13p' android/app/build.gradle
-
-          echo "LINE 14:"
           sed -n '14p' android/app/build.gradle
 
-          echo "LINE 15:"
-          sed -n '15p' android/app/build.gradle
+          echo ""
+          echo "========================================"
+          echo " END OF DIAGNOSTIC"
+          echo "========================================"
 
-          echo "LINE 16:"
-          sed -n '16p' android/app/build.gradle
-
-          echo "LINE 17:"
-          sed -n '17p' android/app/build.gradle
-
-          echo "===== END CHECK ====="
-
-          echo "===== BUILD APK ====="
-
-          cd android
-
-          chmod +x gradlew
-
-          ./gradlew assembleRelease
-
-          echo "===== APK CREATED ====="
-
-          find app/build/outputs -type f -name "*.apk" -print
-
-    artifacts:
-      - "extracted/android/app/build/outputs/**/*.apk"
+          exit 1
