@@ -1,46 +1,43 @@
-      - name: Prepare NexaPay project
+workflows:
+  nexapay_android:
+    name: NexaPay Android
+
+    scripts:
+      - name: Extract project ZIP
         script: |
           set -e
 
-          echo "===== CURRENT DIRECTORY ====="
+          echo "===== START ====="
           pwd
+          ls -la
 
-          echo "===== REPOSITORY CONTENT ====="
-          find . -maxdepth 3 -type f | sort | head -n 200
+          echo "===== FIND ZIP ====="
 
-          echo "===== SEARCHING FOR ZIP FILE ====="
-
-          ZIP_FILE=$(find . -type f -iname "*.zip" | head -n 1)
+          ZIP_FILE=$(find . -maxdepth 2 -type f -name "NexaPay_DZ_CODEMAGIC_FIXED.zip" | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No ZIP file found"
+            echo "ERROR: NexaPay_DZ_CODEMAGIC_FIXED.zip not found"
             exit 1
           fi
 
           echo "ZIP FOUND:"
           echo "$ZIP_FILE"
 
-          echo "===== EXTRACTING ZIP ====="
+          echo "===== EXTRACT ZIP ====="
 
           rm -rf extracted
           mkdir -p extracted
 
           unzip -o "$ZIP_FILE" -d extracted
 
-          echo "===== SEARCHING FOR PACKAGE.JSON ====="
+          echo "===== SEARCH PACKAGE.JSON ====="
 
-          PACKAGE=$(find "$PWD/extracted" \
-            -type f \
-            -name "package.json" \
-            -not -path "*/node_modules/*" \
-            | head -n 1)
+          PACKAGE=$(find extracted -type f -name "package.json" -not -path "*/node_modules/*" | head -n 1)
 
           if [ -z "$PACKAGE" ]; then
-            echo "ERROR: package.json not found inside extracted ZIP"
-
-            echo "===== EXTRACTED STRUCTURE ====="
-            find "$PWD/extracted" -maxdepth 5 -type f | sort | head -n 300
-
+            echo "ERROR: package.json not found inside ZIP"
+            echo "===== EXTRACTED FILES ====="
+            find extracted -maxdepth 5 -type f | sort
             exit 1
           fi
 
@@ -52,43 +49,8 @@
           echo "===== ROOT ====="
           echo "$ROOT"
 
-          if [ ! -d "$ROOT" ]; then
-            echo "ERROR: ROOT directory does not exist"
-            exit 1
-          fi
-
           cd "$ROOT"
 
-          echo "===== CONFIRMED PROJECT ROOT ====="
+          echo "===== PROJECT ROOT CONFIRMED ====="
           pwd
-
-          echo "===== PROJECT FILES ====="
           ls -la
-
-          echo "===== INSTALLING NPM DEPENDENCIES ====="
-
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-
-          echo "===== CHECKING CAPACITOR ====="
-
-          if [ ! -d node_modules/@capacitor/core ]; then
-            echo "ERROR: Capacitor is not installed"
-            exit 1
-          fi
-
-          npx cap --version
-
-          echo "===== ANDROID CHECK ====="
-
-          if [ ! -d android ]; then
-            echo "Android folder does not exist."
-            echo "Creating Android project..."
-
-            npx cap add android
-          fi
-
-          echo "===== ANDROID PROJECT READY ====="
