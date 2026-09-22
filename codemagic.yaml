@@ -18,9 +18,16 @@ workflows:
 
       - name: Build Android App Bundle
         script: |
-          cd android
-          chmod +x gradlew
-          ./gradlew --stacktrace bundleRelease
+          # البحث عن مجلد gradlew والدخول إليه تلقائيًا
+          GRADLE_DIR=$(dirname $(find . -name "gradlew" -print -quit))
+          if [ -n "$GRADLE_DIR" ]; then
+            cd "$GRADLE_DIR"
+            chmod +x gradlew
+            ./gradlew --stacktrace bundleRelease
+          else
+            echo "Error: gradlew file not found in repository!"
+            exit 1
+          fi
 
     artifacts:
-      - android/app/build/outputs/bundle/release/*.aab
+      - "**/build/outputs/bundle/release/*.aab"
