@@ -1,6 +1,5 @@
-
 workflows:
-  nexapay_android:
+  android-build:
     name: NexaPay DZ Android
     max_build_duration: 60
 
@@ -9,81 +8,116 @@ workflows:
       java: 17
 
     scripts:
-      - name: Extract NexaPay project
+      - name: Find project root
         script: |
           set -e
 
-          echo "=== Files in workspace ==="
-          ls -la
+          echo "===== SEARCHING FOR PACKAGE.JSON ====="
 
-          ZIP="NexaPay_DZ_CODEMAGIC_FIXED.zip"
+          PACKAGE=$(find . -type f -name "package.json" -not -path "*/node_modules/*" | head -n 1)
 
-          if [ ! -f "$ZIP" ]; then
-            echo "ERROR: $ZIP not found"
-            echo "Available ZIP files:"
-            find . -maxdepth 3 -type f -iname "*.zip" -print
+          if [ -z "$PACKAGE" ]; then
+            echo "ERROR: package.json not found anywhere"
             exit 1
           fi
 
-          rm -rf extracted
-          mkdir -p extracted
+          echo "Found package.json: $PACKAGE"
 
-          unzip -q "$ZIP" -d extracted
+          ROOT=$(dirname "$PACKAGE")
+          cd "$ROOT"
 
-          echo "=== Searching for package.json ==="
-          find extracted -name package.json -type f -print
+          echo "Project root:"
+          pwd
 
-          PROJECT_ROOT=$(dirname "$(find extracted -name package.json -type f -print -quit)")
+          echo "Project files:"
+          ls -la
 
-          if [ -z "$PROJECT_ROOT" ] || [ "$PROJECT_ROOT" = "extracted" ]; then
-            PROJECT_ROOT="extracted"
-          fi
-
-          echo "PROJECT_ROOT=$PROJECT_ROOT"
-          echo "$PROJECT_ROOT" > /tmp/nexapay_root
-
-      - name: Install dependencies
+      - name: Install Node dependencies
         script: |
           set -e
 
-          PROJECT_ROOT=$(cat /tmp/nexapay_root)
+          PACKAGE=$(find . -type f -name "package.json" -not -path "*/node_modules/*" | head -n 1)
 
-          echo "Using project root:"
-          echo "$PROJECT_ROOT"
+          if [ -z "$PACKAGE" ]; then
+            echo "ERROR: package.json not found"
+            exit 1
+          fi
 
-          cd "$PROJECT_ROOT"
+          ROOT=$(dirname "$PACKAGE")
+          cd "$ROOT"
 
-          echo "=== Project files ==="
-          ls -la
+          echo "Installing dependencies in:"
+          pwd
 
-          test -f package.json
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
-          npm install
+      - name: Install Capacitor
+        script: |
+          set -e
+
+          PACKAGE=$(find . -type f -name "package.json" -not -path "*/node_modules/*" | head -n 1)
+          ROOT=$(dirname "$PACKAGE")
+          cd "$ROOT"
+
+          echo "Installing Capacitor..."
+
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+
+          echo "===== CAPACITOR VERSION ====="
+          npx cap --version
 
       - name: Prepare Capacitor Android
         script: |
           set -e
 
-          PROJECT_ROOT=$(cat /tmp/nexapay_root)
-          cd "$PROJECT_ROOT"
+          PACKAGE=$(find . -type f -name "package.json" -not -path "*/node_modules/*" | head -n 1)
+          ROOT=$(dirname "$PACKAGE")
+          cd "$ROOT"
 
-          if [ -f node_modules/.bin/capacitor ]; then
-            npx cap sync android
-          else
+          echo "===== CAPACITOR CHECK ====="
+
+          if [ ! -f package.json ]; then
+            echo "ERROR: package.json not found"
+            exit 1
+          fi
+
+          if [ ! -d node_modules/@capacitor/core ]; then
             echo "ERROR: Capacitor is not installed"
             exit 1
           fi
+
+          npx cap --version
+
+          echo "===== ANDROID CHECK ====="
+
+          if [ ! -d android ]; then
+            echo "Android folder does not exist."
+            echo "Creating Android project..."
+            npx cap add android
+          fi
+
+          echo "Capacitor Android is ready."
 
       - name: Build Android
         script: |
           set -e
 
-          PROJECT_ROOT=$(cat /tmp/nexapay_root)
-          cd "$PROJECT_ROOT/android"
+          PACKAGE=$(find . -type f -name "package.json" -not -path "*/node_modules/*" | head -n 1)
+          ROOT=$(dirname "$PACKAGE")
+          cd "$ROOT"
+
+          npx cap sync android
+
+          cd android
 
           chmod +x gradlew
-          ./gradlew bundleRelease
+
+          ./gradlew assembleRelease
 
     artifacts:
-      - extracted/**/android/app/build/outputs/**/*.aab
-      - extracted/**/android/app/build/outputs/**/*.apk
+      - "**/app/build/outputs/**/*.apk"
+      - "**/app/build/outputs/**/*.aab"
