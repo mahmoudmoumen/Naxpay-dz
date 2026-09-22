@@ -6,6 +6,9 @@ workflows:
       node: 20
       java: 17
 
+      android_signing:
+        - nexapay_release
+
     scripts:
       - name: Build NexaPay Android
         script: |
@@ -62,7 +65,6 @@ workflows:
           )
 
           file.write_text(text)
-
           print("Android version fixed")
           PY
 
@@ -74,7 +76,9 @@ workflows:
           file = Path("android/app/build.gradle")
           text = file.read_text()
 
-          block = r'''
+          if "compileOptions" not in text:
+              text += """
+          
           android {
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -85,21 +89,13 @@ workflows:
                   jvmTarget = "17"
               }
           }
-          '''
-
-          if "compileOptions" not in text:
-              text += "\n" + block
+          """
 
           file.write_text(text)
-
           print("Java/Kotlin JVM target set to 17")
           PY
 
-          echo "===== BUILD.GRADLE CHECK ====="
-
-          tail -n 35 android/app/build.gradle
-
-          echo "===== BUILD APK ====="
+          echo "===== BUILD SIGNED APK ====="
 
           cd android
 
@@ -107,9 +103,14 @@ workflows:
 
           ./gradlew assembleRelease
 
-          echo "===== APK CREATED ====="
+          echo "===== BUILD SIGNED AAB ====="
 
-          find app/build/outputs -type f -name "*.apk" -print
+          ./gradlew bundleRelease
+
+          echo "===== OUTPUT FILES ====="
+
+          find app/build/outputs -type f \( -name "*.apk" -o -name "*.aab" \) -print
 
     artifacts:
       - "extracted/android/app/build/outputs/**/*.apk"
+      - "extracted/android/app/build/outputs/**/*.aab"
