@@ -19,6 +19,13 @@ workflows:
           echo "Project directory: $PROJECT_DIR"
           cd "$PROJECT_DIR"
           chmod +x gradlew
+
+          ./gradlew --version || true
+
+          GRADLE_BIN=$(find "$HOME/.gradle/wrapper/dists" -type f -path "*/bin/gradle" | head -1)
+          echo "Gradle executable: $GRADLE_BIN"
+          chmod +x "$GRADLE_BIN"
+
           ./gradlew assembleDebug
 
     artifacts:
