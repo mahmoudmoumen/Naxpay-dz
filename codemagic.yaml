@@ -11,14 +11,24 @@ workflows:
         script: |
           npm install
 
-      - name: Build Web Assets (If scripts exist)
+      - name: Build Web Project
         script: |
           npm run build --if-present
 
-      - name: Build Android AAB
+      - name: Add Android Platform & Sync Capacitor
+        script: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Generate Gradle Wrapper & Build AAB
         script: |
           cd android
-          gradle bundleRelease
+          npm run build --if-present || true
+          if [ ! -f "gradlew" ]; then
+            npx cap copy android
+          fi
+          chmod +x gradlew || true
+          ./gradlew bundleRelease
 
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
