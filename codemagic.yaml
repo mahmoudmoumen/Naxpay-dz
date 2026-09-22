@@ -1,44 +1,57 @@
 workflows:
   android-build:
-    name: NexaPay DZ Android
+    name: NexaPay DZ Android Build
     max_build_duration: 60
 
     environment:
-      node: latest
+      flutter: stable
+      groups:
+        - nexapay_credentials
 
     scripts:
-      - name: Extract NexaPay project
+      - name: Check project files
         script: |
-          set -e
-
-          rm -rf extracted
-          mkdir extracted
-
-          unzip -o NaxaAdmin_Android_Compatible_FIXED.zip -d extracted
-
-          cd extracted
-
-          echo "===== PROJECT FILES ====="
+          echo "=== Current directory ==="
+          pwd
+          echo "=== Files ==="
           ls -la
-
-          test -f package.json
-          test -d android
+          
+          if [ ! -f "package.json" ]; then
+            echo "ERROR: package.json not found"
+            echo "Searching for package.json..."
+            find . -name package.json -not -path "*/node_modules/*" -print
+          fi
 
       - name: Install dependencies
         script: |
-          set -e
-          cd extracted
-          npm install
+          if [ -f package.json ]; then
+            npm install
+          else
+            echo "ERROR: package.json not found in project root"
+            exit 1
+          fi
+
+      - name: Prepare Capacitor Android
+        script: |
+          if [ ! -d "node_modules" ]; then
+            echo "Installing npm dependencies..."
+            npm install
+          fi
+
+          if [ ! -d "android" ]; then
+            echo "Android folder not found."
+            echo "Preparing Capacitor Android..."
+            npx cap add android
+          fi
+
+          npx cap sync android
 
       - name: Build Android APK
         script: |
-          set -e
-          cd extracted/android
-
+          cd android
           chmod +x gradlew
-
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew assembleRelease
 
     artifacts:
-      - extracted/android/app/build/outputs/**/*.apk
-      - extracted/android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/**/*.aab
