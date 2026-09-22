@@ -1,32 +1,72 @@
 
 workflows:
-  android-build:
-    name: NaxaAdmin Android Build
+  nexapay-android:
+    name: NexaPay Android Build
     max_build_duration: 30
+    instance_type: linux_x2
 
     environment:
-      java: 21
+      vars:
+        APP_NAME: "NexaPay"
 
     scripts:
-      - name: Extract Android project
+      - name: Build NexaPay APK
         script: |
-          mkdir -p extracted
-          unzip -q NaxaAdmin_Android_Compatible_FIXED.zip -d extracted
+          #!/bin/bash
+          set -e
 
-      - name: Build APK
-        script: |
-          PROJECT_DIR=$(dirname "$(find "$CM_BUILD_DIR/extracted" -name settings.gradle -print -quit)")
-          echo "Project directory: $PROJECT_DIR"
+          echo "======================================"
+          echo "        NexaPay Android Build"
+          echo "======================================"
+
+          BUILD_DIR="$CM_BUILD_DIR"
+          EXTRACT_DIR="$BUILD_DIR/extracted"
+          OUTPUT_DIR="$BUILD_DIR/apk"
+
+          rm -rf "$EXTRACT_DIR"
+          rm -rf "$OUTPUT_DIR"
+
+          mkdir -p "$EXTRACT_DIR"
+          mkdir -p "$OUTPUT_DIR"
+
+          echo "1. البحث عن ملف ZIP..."
+
+          ZIP_FILE=$(find "$BUILD_DIR" -type f -iname "*.zip" -o -iname "*.ZIP" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "❌ لم يتم العثور على ملف ZIP"
+            exit 1
+          fi
+
+          echo "✅ الملف:"
+          echo "$ZIP_FILE"
+
+          echo "2. استخراج المشروع..."
+
+          unzip -o "$ZIP_FILE" -d "$EXTRACT_DIR"
+
+          echo "3. البحث عن مشروع Android..."
+
+          GRADLEW=$(find "$EXTRACT_DIR" -type f -name "gradlew" -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "❌ لم يتم العثور على gradlew"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          echo "✅ المشروع موجود في:"
+          echo "$PROJECT_DIR"
+
           cd "$PROJECT_DIR"
-          chmod +x gradlew
 
-          ./gradlew --version || true
+          echo "4. إعطاء صلاحية التنفيذ لـ gradlew..."
 
-          GRADLE_BIN=$(find "$HOME/.gradle/wrapper/dists" -type f -path "*/bin/gradle" | head -1)
-          echo "Gradle executable: $GRADLE_BIN"
-          chmod +x "$GRADLE_BIN"
+          chmod +x ./gradlew
 
-          ./gradlew assembleDebug
+          echo "5. تنظيف المشروع..."
 
-    artifacts:
-      - "**/build/outputs/apk/**/*.apk"
+          ./gradlew clean
+
+          echo "6. بناء
