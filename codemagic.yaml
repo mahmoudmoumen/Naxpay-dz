@@ -1,8 +1,7 @@
-
 workflows:
   android-workflow:
     name: NexaPay DZ Android
-    instance_type: linux_x2
+    instance_type: linux
 
     environment:
       java: 17
@@ -11,6 +10,7 @@ workflows:
       - name: Extract NexaPay project
         script: |
           set -e
+
           echo "===== Searching for ZIP ====="
           ZIP=$(find . -maxdepth 3 -type f -name "*.zip" | head -n 1)
 
@@ -19,7 +19,8 @@ workflows:
             exit 1
           fi
 
-          echo "Found: $ZIP"
+          echo "Found ZIP: $ZIP"
+
           mkdir -p extracted
           unzip -o "$ZIP" -d extracted
 
@@ -28,27 +29,31 @@ workflows:
 
           if [ -z "$PACKAGE" ]; then
             echo "ERROR: package.json not found inside ZIP"
-            find extracted -maxdepth 4 -type f | head -100
+            echo "===== ZIP CONTENTS ====="
+            find extracted -maxdepth 5 -type f | head -200
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$PACKAGE")
-          echo "Project found: $PROJECT_DIR"
+
+          echo "Project directory: $PROJECT_DIR"
 
           cd "$PROJECT_DIR"
 
-          echo "===== Project files ====="
+          echo "===== PROJECT FILES ====="
           ls -la
 
           echo "===== Installing dependencies ====="
           npm install
 
-          echo "===== Capacitor ====="
+          echo "===== Preparing Capacitor Android ====="
           npx cap sync android
 
-          echo "===== Building Android ====="
+          echo "===== Building Android APK ====="
           cd android
+
           chmod +x gradlew
+
           ./gradlew assembleRelease
 
     artifacts:
