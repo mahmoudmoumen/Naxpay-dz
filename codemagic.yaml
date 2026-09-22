@@ -7,7 +7,7 @@ workflows:
       java: 17
 
     scripts:
-      - name: Inspect build.gradle
+      - name: Build NexaPay Android
         script: |
           set -e
 
@@ -35,27 +35,53 @@ workflows:
 
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
+          echo "===== CAPACITOR VERSION ====="
+
+          npx cap --version
+
           echo "===== CAPACITOR SYNC ====="
 
           npx cap sync android
 
-          echo ""
-          echo "========================================"
-          echo " BUILD.GRADLE LINES 1 TO 25"
-          echo "========================================"
+          echo "===== FIX ANDROID VERSION ====="
 
-          nl -ba android/app/build.gradle | sed -n '1,25p'
+          python3 - <<'PY'
+          from pathlib import Path
 
-          echo ""
-          echo "========================================"
-          echo " LINE 14 ONLY"
-          echo "========================================"
+          file = Path("android/app/build.gradle")
 
-          sed -n '14p' android/app/build.gradle
+          text = file.read_text()
 
-          echo ""
-          echo "========================================"
-          echo " END OF DIAGNOSTIC"
-          echo "========================================"
+          text = text.replace(
+              "versionCode (project.findProperty('versionCode') ?: '1').toInteger()",
+              "versionCode 1"
+          )
 
-          exit 1
+          text = text.replace(
+              "versionName (project.findProperty('versionName') ?: '1.0.0')",
+              'versionName "1.0.0"'
+          )
+
+          file.write_text(text)
+
+          print("build.gradle fixed successfully")
+          PY
+
+          echo "===== VERIFY FIX ====="
+
+          nl -ba android/app/build.gradle | sed -n '6,18p'
+
+          echo "===== BUILD APK ====="
+
+          cd android
+
+          chmod +x gradlew
+
+          ./gradlew assembleRelease
+
+          echo "===== APK CREATED ====="
+
+          find app/build/outputs -type f -name "*.apk" -print
+
+    artifacts:
+      - "extracted/android/app/build/outputs/**/*.apk"
