@@ -1,28 +1,31 @@
 workflows:
   nexarace-release:
     name: NexaRace Release
-    max_build_duration: 120
+    max_build_duration: 60
     instance_type: mac_mini_m2
 
     environment:
-      java: 21
+      java: 17
+      node: 20
 
       android_signing:
         - nexapay_release
 
     scripts:
 
-      - name: Extract Game ZIP
+      - name: Extract NexaPay ZIP
         script: |
           set -e
 
+          echo "======================================"
+          echo "       EXTRACTING NEXAPAY ZIP"
+          echo "======================================"
+
           ZIP_FILE="NexaPay_DZ_CODEMAGIC_FIXED.zip"
 
-          echo "===== Checking ZIP ====="
-
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "ERROR: $ZIP_FILE not found"
-            find . -maxdepth 3 -type f
+            echo "ERROR: ZIP file not found:"
+            echo "$ZIP_FILE"
             exit 1
           fi
 
@@ -38,64 +41,121 @@ workflows:
         script: |
           set -e
 
-          echo "===== Searching for Gradle ====="
+          echo "======================================"
+          echo "       FINDING ANDROID PROJECT"
+          echo "======================================"
 
-          GRADLEW=$(find "$CM_BUILD_DIR/extracted" \
-            -type f \
-            -name "gradlew" \
-            -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found."
-            find "$CM_BUILD_DIR/extracted" -maxdepth 7 -type f | sort
+          if [ ! -f "$CM_BUILD_DIR/extracted/android/gradlew" ]; then
+            echo "ERROR: android/gradlew not found."
+            find "$CM_BUILD_DIR/extracted" -maxdepth 5 -type f | sort
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$GRADLEW")
+          PROJECT_DIR="$CM_BUILD_DIR/extracted/android"
 
           echo "$PROJECT_DIR" > "$CM_BUILD_DIR/project_dir.txt"
 
           chmod +x "$PROJECT_DIR/gradlew"
 
-          echo "Project:"
+          echo "Android project:"
           echo "$PROJECT_DIR"
 
 
-      - name: Configure Android
+      - name: Fix Android build.gradle
         script: |
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$PROJECT_DIR/local.properties"
-
-          echo "Android SDK configured."
-
-
-      - name: Diagnose build.gradle
-        script: |
-          set -e
-
-          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+          BUILD_FILE="$PROJECT_DIR/app/build.gradle"
 
           echo "======================================"
-          echo "       BUILD.GRADLE CHECK"
+          echo "       FIXING BUILD.GRADLE"
           echo "======================================"
 
-          if [ -f "$PROJECT_DIR/app/build.gradle" ]; then
-            echo "File found:"
-            echo "$PROJECT_DIR/app/build.gradle"
-            echo ""
-            echo "===== app/build.gradle ====="
-            nl -ba "$PROJECT_DIR/app/build.gradle" | sed -n '1,100p'
-          else
-            echo "ERROR: app/build.gradle not found"
-            find "$PROJECT_DIR" -maxdepth 4 -type f | sort
+          if [ ! -f "$BUILD_FILE" ]; then
+            echo "ERROR: build.gradle not found."
             exit 1
           fi
 
+          echo "Original build.gradle:"
+          nl -ba "$BUILD_FILE" | sed -n '1,40p'
 
-      - name: Gradle Clean
+          python3 - "$BUILD_FILE" <<'PY'
+          import sys
+
+          path = sys.argv[1]
+
+          with open(path, "r", encoding="utf-8") as f:
+              text = f.read()
+
+          old_code = """        versionCode (project.findProperty('versionCode') ?: '1').toInteger()
+          versionName (project.findProperty('versionName') ?: '1.0.0')"""
+
+          new_code = """        versionCode 1
+          versionName "1.0.0" """
+
+          if old_code in text:
+              text = text.replace(old_code, new_code)
+              print("Fixed versionCode/versionName configuration.")
+          else:
+              print("Dynamic version configuration not found.")
+              print("Keeping existing build.gradle.")
+
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(text)
+          PY
+
+          echo ""
+          echo "Updated build.gradle:"
+          nl -ba "$BUILD_FILE" | sed -n '1,40p'
+
+
+      - name: Prepare Web Assets
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+          WEB_DIR="$CM_BUILD_DIR/extracted/www"
+
+          echo "======================================"
+          echo "          PREPARING WEB ASSETS"
+          echo "======================================"
+
+          if [ -d "$WEB_DIR" ]; then
+
+            rm -rf "$PROJECT_DIR/app/src/main/assets"
+
+            mkdir -p "$PROJECT_DIR/app/src/main/assets/public"
+
+            cp -R "$WEB_DIR"/. \
+              "$PROJECT_DIR/app/src/main/assets/public/"
+
+            echo "Web assets copied successfully."
+
+          else
+
+            echo "WARNING: www directory not found."
+
+          fi
+
+
+      - name: Configure Android SDK
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          echo "======================================"
+          echo "        CONFIGURING ANDROID SDK"
+          echo "======================================"
+
+          echo "sdk.dir=$ANDROID_SDK_ROOT" \
+            > "$PROJECT_DIR/local.properties"
+
+          cat "$PROJECT_DIR/local.properties"
+
+
+      - name: Verify Android Project
         script: |
           set -e
 
@@ -103,9 +163,36 @@ workflows:
 
           cd "$PROJECT_DIR"
 
-          echo "===== Running Gradle Clean ====="
+          echo "======================================"
+          echo "       VERIFYING ANDROID PROJECT"
+          echo "======================================"
 
-          ./gradlew clean --stacktrace
+          test -f gradlew
+          test -f settings.gradle
+          test -f build.gradle
+          test -f app/build.gradle
+          test -f app/src/main/AndroidManifest.xml
+
+          echo "All required Android files found."
+
+          echo ""
+          echo "Gradle version:"
+          ./gradlew --version
+
+
+      - name: Clean Gradle
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          cd "$PROJECT_DIR"
+
+          echo "======================================"
+          echo "            GRADLE CLEAN"
+          echo "======================================"
+
+          ./gradlew clean --no-daemon --stacktrace
 
 
       - name: Build Release APK
@@ -116,9 +203,14 @@ workflows:
 
           cd "$PROJECT_DIR"
 
-          echo "===== Building APK ====="
+          echo "======================================"
+          echo "          BUILDING RELEASE APK"
+          echo "======================================"
 
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            assembleRelease
 
 
       - name: Build Release AAB
@@ -129,11 +221,52 @@ workflows:
 
           cd "$PROJECT_DIR"
 
-          echo "===== Building AAB ====="
+          echo "======================================"
+          echo "          BUILDING RELEASE AAB"
+          echo "======================================"
 
-          ./gradlew bundleRelease --stacktrace
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            bundleRelease
+
+
+      - name: Collect Artifacts
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          echo "======================================"
+          echo "          COLLECTING FILES"
+          echo "======================================"
+
+          mkdir -p "$CM_BUILD_DIR/final"
+
+          APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
+          AAB="$PROJECT_DIR/app/build/outputs/bundle/release/app-release.aab"
+
+          if [ -f "$APK" ]; then
+            cp "$APK" "$CM_BUILD_DIR/final/NexaRace-release.apk"
+            echo "APK found."
+          else
+            echo "ERROR: APK not found."
+            exit 1
+          fi
+
+          if [ -f "$AAB" ]; then
+            cp "$AAB" "$CM_BUILD_DIR/final/NexaRace-release.aab"
+            echo "AAB found."
+          else
+            echo "ERROR: AAB not found."
+            exit 1
+          fi
+
+          echo ""
+          echo "FINAL FILES:"
+          ls -lh "$CM_BUILD_DIR/final"
 
 
     artifacts:
-      - "**/build/outputs/apk/release/*.apk"
-      - "**/build/outputs/bundle/release/*.aab"
+      - final/NexaRace-release.apk
+      - final/NexaRace-release.aab
