@@ -22,14 +22,16 @@ workflows:
           ZIP_FILE="NexaPay_DZ_CODEMAGIC_FIXED.zip"
 
           echo "========================================"
-          echo "SEARCHING FOR ZIP"
+          echo "SEARCHING FOR GAME ZIP"
           echo "========================================"
 
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "ERROR: ZIP not found: $ZIP_FILE"
+            echo "ERROR: ZIP NOT FOUND"
+            echo "Expected file:"
+            echo "$ZIP_FILE"
             echo ""
-            echo "Available files:"
-            find . -maxdepth 3 -type f | sort
+            echo "Files found:"
+            find . -maxdepth 4 -type f | sort
             exit 1
           fi
 
@@ -38,43 +40,48 @@ workflows:
 
           unzip -q "$ZIP_FILE" -d "$CM_BUILD_DIR/extracted"
 
-          echo "ZIP extracted successfully."
+          echo ""
+          echo "ZIP EXTRACTED SUCCESSFULLY"
 
           echo ""
-          echo "Extracted files:"
-          find "$CM_BUILD_DIR/extracted" -maxdepth 4 -type f | sort
+          echo "Extracted project:"
+          find "$CM_BUILD_DIR/extracted" \
+            -maxdepth 5 \
+            -type f \
+            | sort
 
 
       # ==========================================
-      # 2. Find Android Project
+      # 2. Prepare Android Project
       # ==========================================
       - name: Prepare Android Project
         script: |
           set -e
 
-          echo "========================================"
-          echo "SEARCHING FOR ANDROID PROJECT"
-          echo "========================================"
-
           PROJECT_DIR="$CM_BUILD_DIR/extracted/android"
 
+          echo "========================================"
+          echo "PREPARING ANDROID PROJECT"
+          echo "========================================"
+
           if [ ! -d "$PROJECT_DIR" ]; then
-            echo "ERROR: Android directory not found."
+            echo "ERROR: android directory not found"
 
             find "$CM_BUILD_DIR/extracted" \
-              -maxdepth 6 \
+              -maxdepth 8 \
               -type f \
-              \( -name "gradlew" -o -name "settings.gradle" -o -name "build.gradle" \) \
               | sort
 
             exit 1
           fi
 
           if [ ! -f "$PROJECT_DIR/gradlew" ]; then
-            echo "ERROR: gradlew not found."
+            echo "ERROR: gradlew NOT FOUND"
 
+            echo ""
+            echo "Searching for gradlew:"
             find "$CM_BUILD_DIR/extracted" \
-              -maxdepth 8 \
+              -maxdepth 10 \
               -type f \
               -name "gradlew" \
               | sort
@@ -87,18 +94,29 @@ workflows:
           chmod +x "$PROJECT_DIR/gradlew"
 
           echo ""
-          echo "ANDROID PROJECT:"
+          echo "PROJECT DIRECTORY:"
           echo "$PROJECT_DIR"
 
           echo ""
-          echo "Gradle files:"
-          find "$PROJECT_DIR" -maxdepth 4 -type f \
-            \( -name "gradlew" -o -name "build.gradle" -o -name "settings.gradle" -o -name "gradle-wrapper.properties" \) \
+          echo "Gradle wrapper:"
+          ls -la "$PROJECT_DIR/gradlew"
+
+          echo ""
+          echo "Android project files:"
+          find "$PROJECT_DIR" \
+            -maxdepth 4 \
+            -type f \
+            \( \
+              -name "gradlew" \
+              -o -name "build.gradle" \
+              -o -name "settings.gradle" \
+              -o -name "gradle-wrapper.properties" \
+            \) \
             | sort
 
 
       # ==========================================
-      # 3. Replace app/build.gradle
+      # 3. Create Clean app/build.gradle
       # ==========================================
       - name: Replace Android build.gradle
         script: |
@@ -107,7 +125,7 @@ workflows:
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
           echo "========================================"
-          echo "CREATING CLEAN app/build.gradle"
+          echo "CREATING CLEAN APP BUILD FILE"
           echo "========================================"
 
           cat > "$PROJECT_DIR/app/build.gradle" <<'EOF'
@@ -150,7 +168,7 @@ workflows:
           EOF
 
           echo ""
-          echo "===== FINAL app/build.gradle ====="
+          echo "===== app/build.gradle ====="
 
           nl -ba "$PROJECT_DIR/app/build.gradle"
 
@@ -168,13 +186,15 @@ workflows:
           echo "CONFIGURING ANDROID SDK"
           echo "========================================"
 
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$PROJECT_DIR/local.properties"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" \
+            > "$PROJECT_DIR/local.properties"
 
+          echo ""
           cat "$PROJECT_DIR/local.properties"
 
 
       # ==========================================
-      # 5. Check Gradle Project
+      # 5. Check Gradle
       # ==========================================
       - name: Check Gradle Project
         script: |
@@ -192,7 +212,7 @@ workflows:
 
           echo ""
           echo "========================================"
-          echo "CHECKING GRADLE PROJECT"
+          echo "CHECKING PROJECT"
           echo "========================================"
 
           ./gradlew tasks \
@@ -201,7 +221,7 @@ workflows:
 
 
       # ==========================================
-      # 6. Clean Gradle
+      # 6. Clean
       # ==========================================
       - name: Clean Gradle
         script: |
@@ -212,7 +232,7 @@ workflows:
           cd "$PROJECT_DIR"
 
           echo "========================================"
-          echo "CLEANING PROJECT"
+          echo "CLEAN GRADLE"
           echo "========================================"
 
           ./gradlew clean \
@@ -221,15 +241,17 @@ workflows:
 
 
       # ==========================================
-      # 7. Build Release APK
+      # 7. BUILD RELEASE APK
       # ==========================================
       - name: Build Release APK
         script: |
-          set -o pipefail
+          set +e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
           cd "$PROJECT_DIR"
+
+          LOG_FILE="$CM_BUILD_DIR/gradle-apk.log"
 
           echo "========================================"
           echo "BUILDING RELEASE APK"
@@ -239,36 +261,43 @@ workflows:
             --no-daemon \
             --stacktrace \
             --info \
-            2>&1 | tee "$CM_BUILD_DIR/gradle-apk.log"
+            2>&1 | tee "$LOG_FILE"
 
           BUILD_EXIT=${PIPESTATUS[0]}
 
           echo ""
-          echo "========================================"
-          echo "IMPORTANT GRADLE ERRORS"
-          echo "========================================"
+          echo ""
+          echo "########################################"
+          echo "######## ACTUAL GRADLE ERROR ###########"
+          echo "########################################"
 
           grep -n -E \
-            "What went wrong:|Could not |A problem occurred|Caused by:|error:|FAILURE:" \
-            "$CM_BUILD_DIR/gradle-apk.log" \
-            | head -80 || true
+            "What went wrong:|Could not |A problem occurred|Caused by:|error:|FAILURE:|Execution failed for task|Manifest merger failed|Duplicate class|Resource .* not found|uses-sdk|Signing" \
+            "$LOG_FILE" \
+            | tail -100 || true
 
           echo ""
-          echo "========================================"
-          echo "GRADLE EXIT CODE"
-          echo "========================================"
+          echo "########################################"
+          echo "######## ERROR CONTEXT #################"
+          echo "########################################"
 
-          echo "$BUILD_EXIT"
+          grep -n -B 8 -A 15 \
+            -E "What went wrong:|Execution failed for task|A problem occurred|FAILURE:" \
+            "$LOG_FILE" \
+            | tail -180 || true
+
+          echo ""
+          echo "########################################"
+          echo "######## BUILD RESULT ##################"
+          echo "########################################"
+
+          echo "Gradle exit code: $BUILD_EXIT"
 
           if [ "$BUILD_EXIT" -ne 0 ]; then
             echo ""
             echo "========================================"
             echo "APK BUILD FAILED"
             echo "========================================"
-
-            echo ""
-            echo "Last 120 lines:"
-            tail -120 "$CM_BUILD_DIR/gradle-apk.log"
 
             exit "$BUILD_EXIT"
           fi
@@ -278,6 +307,9 @@ workflows:
           echo "APK BUILD SUCCESS"
           echo "========================================"
 
+          echo ""
+          echo "Generated APK files:"
+
           find "$PROJECT_DIR" \
             -type f \
             -path "*/build/outputs/apk/release/*.apk" \
@@ -285,7 +317,7 @@ workflows:
 
 
       # ==========================================
-      # 8. Build Release AAB
+      # 8. BUILD RELEASE AAB
       # ==========================================
       - name: Build Release AAB
         script: |
@@ -305,8 +337,11 @@ workflows:
 
           echo ""
           echo "========================================"
-          echo "AAB BUILD COMPLETE"
+          echo "AAB BUILD SUCCESS"
           echo "========================================"
+
+          echo ""
+          echo "Generated AAB files:"
 
           find "$PROJECT_DIR" \
             -type f \
@@ -315,7 +350,7 @@ workflows:
 
 
     # ==========================================
-    # ARTIFACTS
+    # OUTPUT FILES
     # ==========================================
     artifacts:
       - "**/build/outputs/apk/release/*.apk"
