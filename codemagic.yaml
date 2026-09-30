@@ -1,111 +1,49 @@
 workflows:
-  racing-game-android:
-    name: Racing Game Android
+  nexarace-release:
+    name: NexaRace Release APK
+    max_build_duration: 120
+    instance_type: linux_x2
 
     environment:
-      java: 21
+      java: 17
 
     scripts:
-
-      - name: Extract NexaRace project
+      - name: Check Android project
         script: |
-          set -e
-
-          echo "=== Repository ==="
+          echo "===== ROOT ====="
           pwd
-          ls -lah
+          ls -la
 
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+          echo "===== CHECK GRADLE ====="
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No ZIP file found."
+          test -f gradlew || {
+            echo "ERROR: gradlew not found in project root"
             exit 1
-          fi
+          }
 
-          echo "ZIP found:"
-          echo "$ZIP_FILE"
-
-          rm -rf extracted
-          mkdir -p extracted
-
-          echo "=== Extracting ZIP ==="
-          unzip -o "$ZIP_FILE" -d extracted
-
-          echo "=== Searching project files ==="
-          find extracted -maxdepth 6 -type f | sort
-
-      - name: Find Gradle Wrapper
-        script: |
-          set -e
-
-          echo "=== Searching for gradlew ==="
-
-          GRADLEW=$(find ./extracted -type f -name "gradlew" | head -n 1)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found."
+          test -f settings.gradle || test -f settings.gradle.kts || {
+            echo "ERROR: settings.gradle/settings.gradle.kts not found"
             exit 1
-          fi
+          }
 
-          echo "gradlew found:"
-          echo "$GRADLEW"
-
-          chmod +x "$GRADLEW"
-
-          PROJECT_DIR=$(dirname "$GRADLEW")
-
-          echo "Project directory:"
-          echo "$PROJECT_DIR"
-
-          echo "=== Project root ==="
-          ls -lah "$PROJECT_DIR"
-
-      - name: Build Release APK
-        script: |
-          set -e
-
-          GRADLEW=$(find ./extracted -type f -name "gradlew" | head -n 1)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew not found."
+          test -d app || {
+            echo "ERROR: app directory not found"
             exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$GRADLEW")
-
-          cd "$PROJECT_DIR"
+          }
 
           chmod +x ./gradlew
 
-          echo "================================"
-          echo "JAVA VERSION"
-          echo "================================"
-          java -version
-
-          echo "================================"
-          echo "GRADLE VERSION"
-          echo "================================"
-          ./gradlew --version
-
-          echo "================================"
-          echo "AVAILABLE GRADLE TASKS"
-          echo "================================"
-          ./gradlew tasks --all
-
-          echo "================================"
-          echo "BUILDING RELEASE APK"
-          echo "================================"
-
-          ./gradlew assembleRelease
-
-      - name: Find generated APK
+      - name: Show Gradle projects
         script: |
-          echo "================================"
-          echo "GENERATED APK FILES"
-          echo "================================"
+          ./gradlew projects
 
-          find ./extracted -type f \( -name "*.apk" -o -name "*.aab" \) -print
+      - name: Show Android tasks
+        script: |
+          ./gradlew :app:tasks --all
+
+      - name: Build Release APK
+        script: |
+          ./gradlew :app:assembleRelease --stacktrace
 
     artifacts:
-      - "extracted/**/*.apk"
-      - "extracted/**/*.aab"
+      - app/build/outputs/apk/release/*.apk
