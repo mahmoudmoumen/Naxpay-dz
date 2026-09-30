@@ -3,7 +3,7 @@ workflows:
     name: Racing Game Android
 
     environment:
-      java: 17
+      java: 21
 
     scripts:
 
@@ -11,7 +11,7 @@ workflows:
         script: |
           set -e
 
-          echo "=== Files in GitHub repository ==="
+          echo "=== Repository files ==="
           ls -lah
 
           ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
@@ -21,15 +21,14 @@ workflows:
             exit 1
           fi
 
-          echo "ZIP found:"
-          echo "$ZIP_FILE"
+          echo "ZIP found: $ZIP_FILE"
 
+          rm -rf extracted
           mkdir -p extracted
 
-          echo "=== Extracting ZIP ==="
           unzip -o "$ZIP_FILE" -d extracted
 
-          echo "=== Extracted files ==="
+          echo "=== Extracted project ==="
           find extracted -maxdepth 5 -type f | sort
 
       - name: Find Gradle Wrapper
@@ -41,12 +40,11 @@ workflows:
           GRADLEW=$(find ./extracted -type f -name "gradlew" | head -n 1)
 
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found after extracting ZIP."
-            echo "The ZIP does not contain a usable Gradle Wrapper."
+            echo "ERROR: gradlew was not found."
             exit 1
           fi
 
-          echo "gradlew found:"
+          echo "gradlew found at:"
           echo "$GRADLEW"
 
           chmod +x "$GRADLEW"
@@ -55,9 +53,6 @@ workflows:
 
           echo "Project directory:"
           echo "$PROJECT_DIR"
-
-          echo "=== Project files ==="
-          ls -lah "$PROJECT_DIR"
 
       - name: Build Release APK
         script: |
@@ -76,10 +71,13 @@ workflows:
 
           chmod +x ./gradlew
 
+          echo "=== Java version ==="
+          java -version
+
           echo "=== Gradle version ==="
           ./gradlew --version
 
-          echo "=== Cleaning project ==="
+          echo "=== Cleaning ==="
           ./gradlew clean
 
           echo "=== Building Release APK ==="
@@ -87,7 +85,7 @@ workflows:
 
       - name: Locate APK
         script: |
-          echo "=== APK files ==="
+          echo "=== Generated APK files ==="
           find ./extracted -type f -name "*.apk" -print
 
     artifacts:
