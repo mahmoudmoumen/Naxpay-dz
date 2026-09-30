@@ -1,15 +1,11 @@
-
 workflows:
   nexarace-diagnose:
     name: NexaRace Diagnose
-    max_build_duration: 120
+    max_build_duration: 30
     instance_type: mac_mini_m2
 
     environment:
       java: 17
-
-      android_signing:
-        - nexapay_release
 
     scripts:
 
@@ -17,19 +13,16 @@ workflows:
         script: |
           set -e
 
-          echo "======================================"
-          echo "          EXTRACTING ZIP"
-          echo "======================================"
+          echo "===== START ====="
 
           ZIP_FILE="NexaPay_DZ_CODEMAGIC_FIXED.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "ERROR: ZIP NOT FOUND"
-            echo "Expected:"
-            echo "$ZIP_FILE"
+            echo "ERROR: ZIP FILE NOT FOUND"
+            echo "Expected file: $ZIP_FILE"
             echo ""
-            echo "Repository files:"
-            find . -maxdepth 3 -type f | sort
+            echo "Files found:"
+            find . -maxdepth 3 -type f -print
             exit 1
           fi
 
@@ -41,13 +34,11 @@ workflows:
           echo "ZIP extracted successfully."
 
 
-      - name: Find Android Project
+      - name: Find Gradle Project
         script: |
           set -e
 
-          echo "======================================"
-          echo "       SEARCHING ANDROID PROJECT"
-          echo "======================================"
+          echo "===== SEARCHING FOR GRADLE PROJECT ====="
 
           GRADLEW=$(find "$CM_BUILD_DIR/extracted" \
             -type f \
@@ -57,8 +48,11 @@ workflows:
           if [ -z "$GRADLEW" ]; then
             echo "ERROR: gradlew NOT FOUND"
             echo ""
-            echo "Files inside ZIP:"
-            find "$CM_BUILD_DIR/extracted" -maxdepth 7 -type f | sort
+            echo "ZIP CONTENTS:"
+            find "$CM_BUILD_DIR/extracted" \
+              -maxdepth 7 \
+              -type f \
+              -print
             exit 1
           fi
 
@@ -66,145 +60,124 @@ workflows:
 
           echo "$PROJECT_DIR" > "$CM_BUILD_DIR/project_dir.txt"
 
-          chmod +x "$PROJECT_DIR/gradlew"
-
           echo "Gradle wrapper:"
           echo "$GRADLEW"
 
           echo ""
-          echo "Android project:"
+          echo "Project directory:"
           echo "$PROJECT_DIR"
 
 
-      - name: Configure Android SDK
+      - name: Show Build Gradle Lines
         script: |
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
-          echo "======================================"
-          echo "        ANDROID SDK CONFIGURATION"
-          echo "======================================"
-
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$PROJECT_DIR/local.properties"
-
-          cat "$PROJECT_DIR/local.properties"
-
-
-      - name: Show Project Files
-        script: |
-          set -e
-
-          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
-          cd "$PROJECT_DIR"
-
-          echo "======================================"
-          echo "          PROJECT FILES"
-          echo "======================================"
-
-          pwd
-
-          echo ""
-
-          find . -maxdepth 3 -type f | sort
-
-
-      - name: Show Build Gradle
-        script: |
-          set -e
-
-          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
-          echo "======================================"
+          echo "========================================"
           echo "       ANDROID BUILD.GRADLE"
-          echo "======================================"
+          echo "========================================"
 
           if [ -f "$PROJECT_DIR/app/build.gradle" ]; then
 
-            echo "FOUND:"
+            echo "FILE FOUND:"
             echo "$PROJECT_DIR/app/build.gradle"
 
             echo ""
-            echo "===== LINES 1 - 80 ====="
+            echo "========== LINES 1 - 100 =========="
 
-            nl -ba "$PROJECT_DIR/app/build.gradle" | sed -n '1,80p'
+            nl -ba "$PROJECT_DIR/app/build.gradle" | sed -n '1,100p'
 
           elif [ -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
 
-            echo "FOUND:"
+            echo "FILE FOUND:"
             echo "$PROJECT_DIR/app/build.gradle.kts"
 
             echo ""
-            echo "===== LINES 1 - 80 ====="
+            echo "========== LINES 1 - 100 =========="
 
-            nl -ba "$PROJECT_DIR/app/build.gradle.kts" | sed -n '1,80p'
+            nl -ba "$PROJECT_DIR/app/build.gradle.kts" | sed -n '1,100p'
 
           else
 
             echo "ERROR: app/build.gradle NOT FOUND"
 
+            echo ""
+            echo "PROJECT FILES:"
+            find "$PROJECT_DIR" -maxdepth 4 -type f -print
+
+            exit 1
+
           fi
 
 
-      - name: Show Settings Gradle
+      - name: Show Root Gradle Files
         script: |
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
-          echo "======================================"
-          echo "          SETTINGS GRADLE"
-          echo "======================================"
+          echo "========================================"
+          echo "          ROOT GRADLE FILES"
+          echo "========================================"
+
+          if [ -f "$PROJECT_DIR/build.gradle" ]; then
+            echo "===== build.gradle ====="
+            nl -ba "$PROJECT_DIR/build.gradle" | sed -n '1,100p'
+          fi
+
+          if [ -f "$PROJECT_DIR/build.gradle.kts" ]; then
+            echo "===== build.gradle.kts ====="
+            nl -ba "$PROJECT_DIR/build.gradle.kts" | sed -n '1,100p'
+          fi
 
           if [ -f "$PROJECT_DIR/settings.gradle" ]; then
+            echo "===== settings.gradle ====="
+            nl -ba "$PROJECT_DIR/settings.gradle" | sed -n '1,100p'
+          fi
 
-            nl -ba "$PROJECT_DIR/settings.gradle" | sed -n '1,80p'
+          if [ -f "$PROJECT_DIR/settings.gradle.kts" ]; then
+            echo "===== settings.gradle.kts ====="
+            nl -ba "$PROJECT_DIR/settings.gradle.kts" | sed -n '1,100p'
+          fi
 
-          elif [ -f "$PROJECT_DIR/settings.gradle.kts" ]; then
 
-            nl -ba "$PROJECT_DIR/settings.gradle.kts" | sed -n '1,80p'
+      - name: Show Android Manifest
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          echo "========================================"
+          echo "          ANDROID MANIFEST"
+          echo "========================================"
+
+          if [ -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml" ]; then
+
+            nl -ba "$PROJECT_DIR/app/src/main/AndroidManifest.xml" \
+              | sed -n '1,150p'
 
           else
 
-            echo "settings.gradle NOT FOUND"
+            echo "AndroidManifest.xml not found."
 
           fi
 
 
-      - name: Run Gradle Diagnostic
+      - name: Show Project Structure
         script: |
-          set +e
+          set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
+          echo "========================================"
+          echo "          PROJECT STRUCTURE"
+          echo "========================================"
+
           cd "$PROJECT_DIR"
 
-          echo "======================================"
-          echo "       GRADLE DIAGNOSTIC"
-          echo "======================================"
-
-          echo ""
-          echo "Gradle version:"
-          ./gradlew --version
-
-          echo ""
-          echo "======================================"
-          echo "       RUNNING GRADLE CLEAN"
-          echo "======================================"
-
-          ./gradlew clean --stacktrace --info
-
-          STATUS=$?
-
-          echo ""
-          echo "======================================"
-          echo "       GRADLE EXIT CODE: $STATUS"
-          echo "======================================"
-
-          exit $STATUS
+          find . -maxdepth 4 -type f -print | sort
 
 
     artifacts:
-      - "**/*.apk"
-      - "**/*.aab"
+      - "**/*.log"
