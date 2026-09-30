@@ -11,7 +11,8 @@ workflows:
         script: |
           set -e
 
-          echo "=== Repository files ==="
+          echo "=== Repository ==="
+          pwd
           ls -lah
 
           ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
@@ -21,15 +22,17 @@ workflows:
             exit 1
           fi
 
-          echo "ZIP found: $ZIP_FILE"
+          echo "ZIP found:"
+          echo "$ZIP_FILE"
 
           rm -rf extracted
           mkdir -p extracted
 
+          echo "=== Extracting ZIP ==="
           unzip -o "$ZIP_FILE" -d extracted
 
-          echo "=== Extracted project ==="
-          find extracted -maxdepth 5 -type f | sort
+          echo "=== Searching project files ==="
+          find extracted -maxdepth 6 -type f | sort
 
       - name: Find Gradle Wrapper
         script: |
@@ -44,7 +47,7 @@ workflows:
             exit 1
           fi
 
-          echo "gradlew found at:"
+          echo "gradlew found:"
           echo "$GRADLEW"
 
           chmod +x "$GRADLEW"
@@ -53,6 +56,9 @@ workflows:
 
           echo "Project directory:"
           echo "$PROJECT_DIR"
+
+          echo "=== Project root ==="
+          ls -lah "$PROJECT_DIR"
 
       - name: Build Release APK
         script: |
@@ -71,22 +77,34 @@ workflows:
 
           chmod +x ./gradlew
 
-          echo "=== Java version ==="
+          echo "================================"
+          echo "JAVA VERSION"
+          echo "================================"
           java -version
 
-          echo "=== Gradle version ==="
+          echo "================================"
+          echo "GRADLE VERSION"
+          echo "================================"
           ./gradlew --version
 
-          echo "=== Cleaning ==="
-          ./gradlew clean
+          echo "================================"
+          echo "AVAILABLE GRADLE TASKS"
+          echo "================================"
+          ./gradlew tasks --all
 
-          echo "=== Building Release APK ==="
+          echo "================================"
+          echo "BUILDING RELEASE APK"
+          echo "================================"
+
           ./gradlew assembleRelease
 
-      - name: Locate APK
+      - name: Find generated APK
         script: |
-          echo "=== Generated APK files ==="
-          find ./extracted -type f -name "*.apk" -print
+          echo "================================"
+          echo "GENERATED APK FILES"
+          echo "================================"
+
+          find ./extracted -type f \( -name "*.apk" -o -name "*.aab" \) -print
 
     artifacts:
       - "extracted/**/*.apk"
