@@ -1,49 +1,27 @@
 workflows:
-  nexarace-release:
-    name: NexaRace Release APK
-    max_build_duration: 120
-    instance_type: linux_x2
+  racing-game-android:
+    name: Racing Game Android
+    max_build_duration: 60
+    instance_type: mac_mini_m2
 
     environment:
       java: 17
 
+      android_signing:
+        - racing_release
+
     scripts:
-      - name: Check Android project
+      - name: Make Gradle executable
         script: |
-          echo "===== ROOT ====="
-          pwd
-          ls -la
+          chmod +x gradlew
 
-          echo "===== CHECK GRADLE ====="
-
-          test -f gradlew || {
-            echo "ERROR: gradlew not found in project root"
-            exit 1
-          }
-
-          test -f settings.gradle || test -f settings.gradle.kts || {
-            echo "ERROR: settings.gradle/settings.gradle.kts not found"
-            exit 1
-          }
-
-          test -d app || {
-            echo "ERROR: app directory not found"
-            exit 1
-          }
-
-          chmod +x ./gradlew
-
-      - name: Show Gradle projects
+      - name: Clean project
         script: |
-          ./gradlew projects
-
-      - name: Show Android tasks
-        script: |
-          ./gradlew :app:tasks --all
+          ./gradlew clean
 
       - name: Build Release APK
         script: |
-          ./gradlew :app:assembleRelease --stacktrace
+          ./gradlew assembleRelease
 
     artifacts:
       - app/build/outputs/apk/release/*.apk
