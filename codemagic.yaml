@@ -1,180 +1,39 @@
 workflows:
-  nexapay_android:
-    name: NexaPay Android
+  racing-game-android:
+    name: Racing Game Android
+    max_build_duration: 60
 
     environment:
-      node: 20
       java: 17
 
       android_signing:
-        - nexapay_release
+        - racing_release
 
     scripts:
-      - name: Build NexaPay Android
+      - name: Make Gradle executable
         script: |
-          set -e
-
-          echo "===== FIND ZIP ====="
-
-          ZIP_FILE=$(find . -maxdepth 2 -type f -name "NexaPay_DZ_CODEMAGIC_FIXED.zip" | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: ZIP file not found"
-            exit 1
-          fi
-
-          echo "ZIP FOUND: $ZIP_FILE"
-
-          echo "===== EXTRACT ZIP ====="
-
-          rm -rf extracted
-          mkdir -p extracted
-
-          unzip -o "$ZIP_FILE" -d extracted
-
-          cd extracted
-
-          echo "===== INSTALL CAPACITOR ====="
-
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-
-          echo "===== CAPACITOR VERSION ====="
-
-          npx cap --version
-
-          echo "===== CAPACITOR SYNC ====="
-
-          npx cap sync android
-
-          echo "===== FIX ANDROID VERSION ====="
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          file = Path("android/app/build.gradle")
-          text = file.read_text()
-
-          text = text.replace(
-              "versionCode (project.findProperty('versionCode') ?: '1').toInteger()",
-              "versionCode 1"
-          )
-
-          text = text.replace(
-              "versionName (project.findProperty('versionName') ?: '1.0.0')",
-              'versionName "1.0.0"'
-          )
-
-          file.write_text(text)
-          print("Android version fixed")
-          PY
-
-          echo "===== FIX JVM TARGET ====="
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          file = Path("android/app/build.gradle")
-          text = file.read_text()
-
-          if "compileOptions" not in text:
-              text += """
-
-          android {
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-          }
-          """
-
-          file.write_text(text)
-          print("Java/Kotlin JVM target set to 17")
-          PY
-
-          echo "===== CONFIGURE ANDROID SIGNING ====="
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          file = Path("android/app/build.gradle")
-          text = file.read_text()
-
-          signing_block = """
-          
-          signingConfigs {
-              release {
-                  if (System.getenv()["CI"]) {
-                      storeFile file(System.getenv()["CM_KEYSTORE_PATH"])
-                      storePassword System.getenv()["CM_KEYSTORE_PASSWORD"]
-                      keyAlias System.getenv()["CM_KEY_ALIAS"]
-                      keyPassword System.getenv()["CM_KEY_PASSWORD"]
-                  }
-              }
-          }
-          """
-
-          if "signingConfigs {" not in text:
-              marker = "android {"
-              pos = text.find(marker)
-
-              if pos == -1:
-                  raise SystemExit("ERROR: android block not found")
-
-              insert_pos = pos + len(marker)
-              text = text[:insert_pos] + signing_block + text[insert_pos:]
-
-          if "signingConfig signingConfigs.release" not in text:
-              marker = "buildTypes {"
-              pos = text.find(marker)
-
-              if pos == -1:
-                  raise SystemExit("ERROR: buildTypes block not found")
-
-              release_pos = text.find("release {", pos)
-
-              if release_pos == -1:
-                  raise SystemExit("ERROR: release build type not found")
-
-              insert_pos = release_pos + len("release {")
-
-              text = (
-                  text[:insert_pos]
-                  + """
-                  signingConfig signingConfigs.release
-                  """
-                  + text[insert_pos:]
-              )
-
-          file.write_text(text)
-          print("Release signing configured successfully")
-          PY
-
-          echo "===== VERIFY SIGNING CONFIGURATION ====="
-
-          grep -n "signingConfigs" android/app/build.gradle
-          grep -n "signingConfig signingConfigs.release" android/app/build.gradle
-          grep -n "CM_KEYSTORE_PATH" android/app/build.gradle
-
-          echo "===== BUILD SIGNED APK ====="
-
-          cd android
-
           chmod +x gradlew
 
+      - name: Clean project
+        script: |
+          ./gradlew clean
+
+      - name: Build Release APK
+        script: |
           ./gradlew assembleRelease
 
-          echo "===== BUILD SIGNED AAB ====="
-
+      - name: Build Release AAB
+        script: |
           ./gradlew bundleRelease
 
-          echo "===== VERIFY OUTPUT FILES ====="
-
-          find app/build/outputs -type f \( -name "*.apk" -o -name "*.aab" \) -print
-
     artifacts:
-      - "extracted/android/app/build/outputs/**/*.apk"
-      - "extracted/android/app/build/outputs/**/*.aab"
+      - app/build/outputs/apk/release/*.apk
+      - app/build/outputs/bundle/release/*.aab
+
+    publishing:
+      email:
+        recipients:
+          - YOUR_EMAIL@example.com
+        notify:
+          success: true
+          failure: true
