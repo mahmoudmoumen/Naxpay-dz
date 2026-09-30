@@ -7,7 +7,7 @@ workflows:
       java: 17
 
       android_signing:
-        - racing_release
+        - nexapay_release
 
     scripts:
       - name: Make Gradle executable
