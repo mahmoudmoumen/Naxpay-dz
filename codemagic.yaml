@@ -8,7 +8,7 @@ workflows:
       java: 17
 
       android_signing:
-        - "naxpay dz"
+        - nexapay_release
 
     scripts:
 
@@ -18,40 +18,57 @@ workflows:
 
           ZIP_FILE="NexaPay_DZ_CODEMAGIC_FIXED.zip"
 
+          echo "======================================"
+          echo "      NEXARACE BUILD PREPARATION"
+          echo "======================================"
+
           if [ ! -f "$ZIP_FILE" ]; then
             echo "ERROR: ZIP file not found:"
             echo "$ZIP_FILE"
+            echo ""
+            echo "Files in repository:"
+            find . -maxdepth 3 -type f | sort
             exit 1
           fi
 
+          echo "ZIP found: $ZIP_FILE"
+
           rm -rf "$CM_BUILD_DIR/extracted"
           mkdir -p "$CM_BUILD_DIR/extracted"
+
+          echo "Extracting ZIP..."
 
           unzip -q "$ZIP_FILE" -d "$CM_BUILD_DIR/extracted"
 
           echo "ZIP extracted successfully."
 
-          echo "Searching for Gradle project..."
+          echo "Searching for Gradle wrapper..."
 
-          GRADLEW=$(find "$CM_BUILD_DIR/extracted" \
+          GRADLEW_PATH=$(find "$CM_BUILD_DIR/extracted" \
             -type f \
             -name "gradlew" \
             -print -quit)
 
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found."
-            echo "Contents of ZIP:"
-            find "$CM_BUILD_DIR/extracted" -maxdepth 5 -type f | sort
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "ERROR: gradlew was not found inside the ZIP."
+            echo ""
+            echo "ZIP contents:"
+            find "$CM_BUILD_DIR/extracted" -maxdepth 6 -type f | sort
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$GRADLEW")
+          PROJECT_DIR=$(dirname "$GRADLEW_PATH")
 
           echo "$PROJECT_DIR" > "$CM_BUILD_DIR/project_dir.txt"
 
           chmod +x "$PROJECT_DIR/gradlew"
 
-          echo "Android project:"
+          echo ""
+          echo "Gradle wrapper found:"
+          echo "$GRADLEW_PATH"
+
+          echo ""
+          echo "Android project directory:"
           echo "$PROJECT_DIR"
 
 
@@ -61,12 +78,19 @@ workflows:
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
+          echo "======================================"
+          echo "       CONFIGURING ANDROID SDK"
+          echo "======================================"
+
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$PROJECT_DIR/local.properties"
 
-          echo "Android SDK configured."
+          echo "local.properties:"
+          cat "$PROJECT_DIR/local.properties"
+
+          echo "Android SDK configured successfully."
 
 
-      - name: Check Gradle
+      - name: Check Android Project
         script: |
           set -e
 
@@ -74,10 +98,23 @@ workflows:
 
           cd "$PROJECT_DIR"
 
+          echo "======================================"
+          echo "          PROJECT CHECK"
+          echo "======================================"
+
+          echo "Current directory:"
+          pwd
+
+          echo ""
+          echo "Project files:"
+          find . -maxdepth 2 -type f | sort
+
+          echo ""
+          echo "Gradle version:"
           ./gradlew --version
 
 
-      - name: Clean
+      - name: Clean Project
         script: |
           set -e
 
@@ -85,21 +122,33 @@ workflows:
 
           cd "$PROJECT_DIR"
 
-          ./gradlew clean
+          echo "======================================"
+          echo "             CLEAN BUILD"
+          echo "======================================"
+
+          ./gradlew clean --stacktrace
+
+          echo "Clean completed successfully."
 
 
-      - name: Build APK
+      - name: Build Release APK
         script: |
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
           cd "$PROJECT_DIR"
+
+          echo "======================================"
+          echo "        BUILDING RELEASE APK"
+          echo "======================================"
 
           ./gradlew assembleRelease --stacktrace
 
+          echo "Release APK build completed."
 
-      - name: Build AAB
+
+      - name: Build Release AAB
         script: |
           set -e
 
@@ -107,37 +156,64 @@ workflows:
 
           cd "$PROJECT_DIR"
 
+          echo "======================================"
+          echo "        BUILDING RELEASE AAB"
+          echo "======================================"
+
           ./gradlew bundleRelease --stacktrace
 
+          echo "Release AAB build completed."
 
-      - name: Collect builds
+
+      - name: Collect Final Files
         script: |
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
+          echo "======================================"
+          echo "          COLLECTING BUILDS"
+          echo "======================================"
+
           mkdir -p "$CM_BUILD_DIR/final"
 
-          APK=$(find "$PROJECT_DIR" \
+          APK_FILE=$(find "$PROJECT_DIR" \
             -type f \
             -path "*/build/outputs/apk/release/*.apk" \
             -print -quit)
 
-          AAB=$(find "$PROJECT_DIR" \
+          AAB_FILE=$(find "$PROJECT_DIR" \
             -type f \
             -path "*/build/outputs/bundle/release/*.aab" \
             -print -quit)
 
-          if [ -z "$APK" ]; then
-            echo "ERROR: APK not found."
+          if [ -z "$APK_FILE" ]; then
+            echo "ERROR: Release APK was not found."
             exit 1
           fi
 
-          cp "$APK" "$CM_BUILD_DIR/final/NexaRace-release.apk"
+          echo "APK found:"
+          echo "$APK_FILE"
 
-          if [ -n "$AAB" ]; then
-            cp "$AAB" "$CM_BUILD_DIR/final/NexaRace-release.aab"
+          cp "$APK_FILE" \
+             "$CM_BUILD_DIR/final/NexaRace-release.apk"
+
+          if [ -n "$AAB_FILE" ]; then
+            echo ""
+            echo "AAB found:"
+            echo "$AAB_FILE"
+
+            cp "$AAB_FILE" \
+               "$CM_BUILD_DIR/final/NexaRace-release.aab"
+          else
+            echo ""
+            echo "WARNING: AAB was not found."
           fi
+
+          echo ""
+          echo "======================================"
+          echo "             FINAL FILES"
+          echo "======================================"
 
           ls -lh "$CM_BUILD_DIR/final"
 
