@@ -1,27 +1,147 @@
 workflows:
-  racing-game-android:
-    name: Racing Game Android
-    max_build_duration: 60
+  nexarace-release:
+    name: NexaRace Release
+    max_build_duration: 120
     instance_type: mac_mini_m2
 
     environment:
       java: 17
 
       android_signing:
-        - racing_release
+        - "naxpay dz"
 
     scripts:
-      - name: Make Gradle executable
-        script: |
-          chmod +x gradlew
 
-      - name: Clean project
+      - name: Extract NexaPay ZIP
         script: |
+          set -e
+
+          ZIP_FILE="NexaPay_DZ_CODEMAGIC_FIXED.zip"
+
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "ERROR: ZIP file not found:"
+            echo "$ZIP_FILE"
+            exit 1
+          fi
+
+          rm -rf "$CM_BUILD_DIR/extracted"
+          mkdir -p "$CM_BUILD_DIR/extracted"
+
+          unzip -q "$ZIP_FILE" -d "$CM_BUILD_DIR/extracted"
+
+          echo "ZIP extracted successfully."
+
+          echo "Searching for Gradle project..."
+
+          GRADLEW=$(find "$CM_BUILD_DIR/extracted" \
+            -type f \
+            -name "gradlew" \
+            -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew was not found."
+            echo "Contents of ZIP:"
+            find "$CM_BUILD_DIR/extracted" -maxdepth 5 -type f | sort
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          echo "$PROJECT_DIR" > "$CM_BUILD_DIR/project_dir.txt"
+
+          chmod +x "$PROJECT_DIR/gradlew"
+
+          echo "Android project:"
+          echo "$PROJECT_DIR"
+
+
+      - name: Configure Android SDK
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$PROJECT_DIR/local.properties"
+
+          echo "Android SDK configured."
+
+
+      - name: Check Gradle
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          cd "$PROJECT_DIR"
+
+          ./gradlew --version
+
+
+      - name: Clean
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          cd "$PROJECT_DIR"
+
           ./gradlew clean
 
-      - name: Build Release APK
+
+      - name: Build APK
         script: |
-          ./gradlew assembleRelease
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          cd "$PROJECT_DIR"
+
+          ./gradlew assembleRelease --stacktrace
+
+
+      - name: Build AAB
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          cd "$PROJECT_DIR"
+
+          ./gradlew bundleRelease --stacktrace
+
+
+      - name: Collect builds
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          mkdir -p "$CM_BUILD_DIR/final"
+
+          APK=$(find "$PROJECT_DIR" \
+            -type f \
+            -path "*/build/outputs/apk/release/*.apk" \
+            -print -quit)
+
+          AAB=$(find "$PROJECT_DIR" \
+            -type f \
+            -path "*/build/outputs/bundle/release/*.aab" \
+            -print -quit)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK not found."
+            exit 1
+          fi
+
+          cp "$APK" "$CM_BUILD_DIR/final/NexaRace-release.apk"
+
+          if [ -n "$AAB" ]; then
+            cp "$AAB" "$CM_BUILD_DIR/final/NexaRace-release.aab"
+          fi
+
+          ls -lh "$CM_BUILD_DIR/final"
+
 
     artifacts:
-      - app/build/outputs/apk/release/*.apk
+      - final/*.apk
+      - final/*.aab
