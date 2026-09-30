@@ -7,51 +7,89 @@ workflows:
 
     scripts:
 
-      - name: Find Gradle Wrapper
+      - name: Extract NexaRace project
         script: |
-          echo "=== Project structure ==="
-          pwd
-          find . -maxdepth 5 -type f | sort
+          set -e
 
-          echo "=== Searching for gradlew ==="
-          GRADLEW=$(find . -type f -name "gradlew" | head -n 1)
+          echo "=== Files in GitHub repository ==="
+          ls -lah
 
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found"
+          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No ZIP file found."
             exit 1
           fi
 
-          echo "Found gradlew at:"
+          echo "ZIP found:"
+          echo "$ZIP_FILE"
+
+          mkdir -p extracted
+
+          echo "=== Extracting ZIP ==="
+          unzip -o "$ZIP_FILE" -d extracted
+
+          echo "=== Extracted files ==="
+          find extracted -maxdepth 5 -type f | sort
+
+      - name: Find Gradle Wrapper
+        script: |
+          set -e
+
+          echo "=== Searching for gradlew ==="
+
+          GRADLEW=$(find ./extracted -type f -name "gradlew" | head -n 1)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew was not found after extracting ZIP."
+            echo "The ZIP does not contain a usable Gradle Wrapper."
+            exit 1
+          fi
+
+          echo "gradlew found:"
           echo "$GRADLEW"
 
           chmod +x "$GRADLEW"
 
-          GRADLE_DIR=$(dirname "$GRADLEW")
-          echo "Gradle directory:"
-          echo "$GRADLE_DIR"
+          PROJECT_DIR=$(dirname "$GRADLEW")
 
-          cd "$GRADLE_DIR"
+          echo "Project directory:"
+          echo "$PROJECT_DIR"
+
+          echo "=== Project files ==="
+          ls -lah "$PROJECT_DIR"
+
+      - name: Build Release APK
+        script: |
+          set -e
+
+          GRADLEW=$(find ./extracted -type f -name "gradlew" | head -n 1)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew not found."
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          cd "$PROJECT_DIR"
+
+          chmod +x ./gradlew
 
           echo "=== Gradle version ==="
           ./gradlew --version
 
-      - name: Build Release APK
-        script: |
-          GRADLEW=$(find . -type f -name "gradlew" | head -n 1)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found"
-            exit 1
-          fi
-
-          GRADLE_DIR=$(dirname "$GRADLEW")
-          cd "$GRADLE_DIR"
-
-          chmod +x ./gradlew
-
+          echo "=== Cleaning project ==="
           ./gradlew clean
+
+          echo "=== Building Release APK ==="
           ./gradlew assembleRelease
 
+      - name: Locate APK
+        script: |
+          echo "=== APK files ==="
+          find ./extracted -type f -name "*.apk" -print
+
     artifacts:
-      - "**/build/outputs/apk/release/*.apk"
-      - "**/build/outputs/apk/release/*.aab"
+      - "extracted/**/*.apk"
+      - "extracted/**/*.aab"
