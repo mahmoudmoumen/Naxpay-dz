@@ -12,14 +12,16 @@ workflows:
 
     scripts:
 
-      - name: Extract ZIP
+      - name: Extract NexaRace V3
         script: |
           set -e
 
-          ZIP_FILE="NexaPay_DZ_CODEMAGIC_FIXED.zip"
+          ZIP_FILE="NexaRace_Complete_V3_Icon.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
             echo "ERROR: ZIP not found: $ZIP_FILE"
+            echo "Files available:"
+            find . -maxdepth 2 -type f | sort
             exit 1
           fi
 
@@ -28,93 +30,67 @@ workflows:
 
           unzip -q "$ZIP_FILE" -d "$CM_BUILD_DIR/extracted"
 
-          echo "ZIP extracted successfully."
+          echo "========================================"
+          echo "ZIP EXTRACTED SUCCESSFULLY"
+          echo "========================================"
+
+          find "$CM_BUILD_DIR/extracted" -maxdepth 5 -type f \
+            \( -name "gradlew" -o -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            -print
 
 
-      - name: Prepare Android Project
+      - name: Find Android Project
         script: |
           set -e
 
-          PROJECT_DIR="$CM_BUILD_DIR/extracted/android"
+          echo "Searching for Gradle wrapper..."
 
-          if [ ! -f "$PROJECT_DIR/gradlew" ]; then
-            echo "ERROR: gradlew not found."
-            find "$CM_BUILD_DIR/extracted" \
-              -maxdepth 10 \
-              -type f \
-              -name "gradlew" \
-              | sort
+          GRADLEW=$(find "$CM_BUILD_DIR/extracted" \
+            -type f \
+            -name "gradlew" \
+            -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew was not found anywhere in the ZIP."
+            echo ""
+            echo "ZIP CONTENT:"
+            find "$CM_BUILD_DIR/extracted" -maxdepth 8 -type f | sort
             exit 1
           fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
 
           echo "$PROJECT_DIR" > "$CM_BUILD_DIR/project_dir.txt"
 
           chmod +x "$PROJECT_DIR/gradlew"
 
-          echo "Android project:"
-          echo "$PROJECT_DIR"
+          echo "========================================"
+          echo "ANDROID PROJECT FOUND"
+          echo "========================================"
+          echo "Project: $PROJECT_DIR"
+          echo "Gradle:  $PROJECT_DIR/gradlew"
 
 
-      - name: Configure Android Build
+      - name: Check Android Project
         script: |
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
-          cat > "$PROJECT_DIR/app/build.gradle" <<'EOF'
-          plugins {
-              id 'com.android.application'
-              id 'org.jetbrains.kotlin.android'
-          }
+          cd "$PROJECT_DIR"
 
-          android {
-              namespace 'com.nexapay.dz'
+          echo "========================================"
+          echo "PROJECT FILES"
+          echo "========================================"
 
-              compileSdk 36
+          ls -la
 
-              defaultConfig {
-                  applicationId 'com.nexapay.dz'
-                  minSdk 23
-                  targetSdk 36
-                  versionCode 1
-                  versionName '1.0.0'
-              }
+          echo ""
+          echo "========================================"
+          echo "GRADLE VERSION"
+          echo "========================================"
 
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-
-              buildTypes {
-                  debug {
-                      applicationIdSuffix '.debug'
-                  }
-
-                  release {
-                      minifyEnabled false
-                      shrinkResources false
-
-                      proguardFiles \
-                          getDefaultProguardFile('proguard-android-optimize.txt'), \
-                          'proguard-rules.pro'
-                  }
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.7.0'
-              implementation 'androidx.core:core-ktx:1.15.0'
-              implementation 'androidx.activity:activity:1.10.1'
-              implementation 'com.google.android.material:material:1.12.0'
-          }
-          EOF
-
-          echo "===== FINAL BUILD.GRADLE ====="
-          cat "$PROJECT_DIR/app/build.gradle"
+          ./gradlew --version
 
 
       - name: Configure Android SDK
@@ -126,8 +102,10 @@ workflows:
           echo "sdk.dir=$ANDROID_SDK_ROOT" \
             > "$PROJECT_DIR/local.properties"
 
+          echo "Android SDK configured."
 
-      - name: Check Gradle Project
+
+      - name: Validate Gradle Project
         script: |
           set -e
 
@@ -135,20 +113,26 @@ workflows:
 
           cd "$PROJECT_DIR"
 
-          ./gradlew --version
+          echo "========================================"
+          echo "VALIDATING GRADLE PROJECT"
+          echo "========================================"
 
           ./gradlew tasks \
             --no-daemon \
             --stacktrace
 
 
-      - name: Clean Gradle
+      - name: Clean Project
         script: |
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
           cd "$PROJECT_DIR"
+
+          echo "========================================"
+          echo "CLEANING PROJECT"
+          echo "========================================"
 
           ./gradlew clean \
             --no-daemon \
@@ -164,7 +148,7 @@ workflows:
           cd "$PROJECT_DIR"
 
           echo "========================================"
-          echo "BUILDING RELEASE APK"
+          echo "BUILDING NEXARACE RELEASE APK"
           echo "========================================"
 
           ./gradlew assembleRelease \
@@ -191,7 +175,7 @@ workflows:
           cd "$PROJECT_DIR"
 
           echo "========================================"
-          echo "BUILDING RELEASE AAB"
+          echo "BUILDING NEXARACE RELEASE AAB"
           echo "========================================"
 
           ./gradlew bundleRelease \
