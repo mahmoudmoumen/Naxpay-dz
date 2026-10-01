@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m2
 
     environment:
-      java: 17
+      java: 21
 
       android_signing:
         - nexapay_release
@@ -20,6 +20,7 @@ workflows:
 
           if [ ! -f "$ZIP_FILE" ]; then
             echo "ERROR: ZIP not found: $ZIP_FILE"
+            echo "Available files:"
             find . -maxdepth 3 -type f | sort
             exit 1
           fi
@@ -29,7 +30,9 @@ workflows:
 
           unzip -q "$ZIP_FILE" -d "$CM_BUILD_DIR/extracted"
 
-          echo "ZIP extracted successfully"
+          echo "========================================"
+          echo "ZIP EXTRACTED SUCCESSFULLY"
+          echo "========================================"
 
           find "$CM_BUILD_DIR/extracted" \
             -type f \
@@ -49,8 +52,12 @@ workflows:
             -print -quit)
 
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found"
-            find "$CM_BUILD_DIR/extracted" -maxdepth 10 -type f | sort
+            echo "ERROR: gradlew was not found."
+
+            find "$CM_BUILD_DIR/extracted" \
+              -maxdepth 10 \
+              -type f | sort
+
             exit 1
           fi
 
@@ -60,7 +67,9 @@ workflows:
 
           chmod +x "$PROJECT_DIR/gradlew"
 
-          echo "ANDROID PROJECT:"
+          echo "========================================"
+          echo "ANDROID PROJECT FOUND"
+          echo "========================================"
           echo "$PROJECT_DIR"
 
 
@@ -70,9 +79,10 @@ workflows:
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$PROJECT_DIR/local.properties"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" \
+            > "$PROJECT_DIR/local.properties"
 
-          echo "Android SDK configured"
+          echo "Android SDK configured."
 
 
       - name: Check Android Project
@@ -80,13 +90,22 @@ workflows:
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
           cd "$PROJECT_DIR"
 
-          echo "===== JAVA ====="
+          echo "========================================"
+          echo "JAVA VERSION"
+          echo "========================================"
+
           java -version
 
-          echo "===== GRADLE ====="
-          ./gradlew --version
+          echo ""
+          echo "========================================"
+          echo "GRADLE VERSION"
+          echo "========================================"
+
+          ./gradlew --version \
+            --no-daemon
 
 
       - name: Validate Gradle Project
@@ -94,6 +113,7 @@ workflows:
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
           cd "$PROJECT_DIR"
 
           ./gradlew tasks \
@@ -106,6 +126,7 @@ workflows:
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
           cd "$PROJECT_DIR"
 
           ./gradlew clean \
@@ -118,6 +139,7 @@ workflows:
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
           cd "$PROJECT_DIR"
 
           echo "========================================"
@@ -129,11 +151,12 @@ workflows:
             --stacktrace \
             --info
 
+          echo ""
           echo "========================================"
           echo "APK BUILD SUCCESS"
           echo "========================================"
 
-          find . \
+          find "$PROJECT_DIR" \
             -type f \
             -path "*/build/outputs/apk/release/*.apk" \
             -print
