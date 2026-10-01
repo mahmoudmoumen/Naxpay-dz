@@ -1,138 +1,121 @@
 workflows:
-  racing-game-android:
-    name: Racing Game Android
+  nexarace-release:
+    name: NexaRace Android Release
     max_build_duration: 60
+    instance_type: mac_mini_m2
 
     environment:
       java: 21
-      android_signing:
-        - nexapay_release
 
     scripts:
 
-      - name: Show Environment
+      - name: Extract Android ZIP
         script: |
-          echo "===== CURRENT DIRECTORY ====="
-          pwd
-          echo "===== ROOT FILES ====="
-          ls -la
+          set -e
+
+          echo "=== Repository files ==="
+          find "$CM_BUILD_DIR" -maxdepth 2 -type f | sort
+
+          ZIP_FILE="$CM_BUILD_DIR/NexaRace_FINAL_ANDROID_CODMATIC_READY.zip"
+
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "ERROR: ZIP file not found"
+            exit 1
+          fi
+
+          rm -rf "$CM_BUILD_DIR/android_project"
+          mkdir -p "$CM_BUILD_DIR/android_project"
+
+          unzip -q "$ZIP_FILE" -d "$CM_BUILD_DIR/android_project"
+
+          echo "=== Extracted files ==="
+          find "$CM_BUILD_DIR/android_project" -type f | sort
 
       - name: Find Android Project
         script: |
-          echo "===== SEARCHING FOR GRADLE PROJECT ====="
+          set -e
 
-          if [ -f "./gradlew" ]; then
-            PROJECT_DIR="$(pwd)"
-          elif [ -f "./android/gradlew" ]; then
-            PROJECT_DIR="$(pwd)/android"
-          else
-            echo "ERROR: gradlew was not found"
-            echo "Searching entire repository..."
-            find . -name "gradlew" -type f -print
+          ROOT="$CM_BUILD_DIR/android_project"
+
+          echo "=== Searching for Gradle project ==="
+
+          GRADLEW=$(find "$ROOT" -type f -name "gradlew" -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "gradlew not found."
+            echo "Searching for build.gradle:"
+            find "$ROOT" -type f \( \
+              -name "build.gradle" \
+              -o -name "build.gradle.kts" \
+              -o -name "settings.gradle" \
+              -o -name "settings.gradle.kts" \
+            \) -print
+
+            echo "=== Complete extracted tree ==="
+            find "$ROOT" -maxdepth 8 -type f | sort
+
             exit 1
           fi
 
-          echo "PROJECT_DIR=$PROJECT_DIR"
+          PROJECT_DIR="$(dirname "$GRADLEW")"
 
-      - name: Check Gradle Files
-        script: |
-          if [ -f "./gradlew" ]; then
-            PROJECT_DIR="$(pwd)"
-          elif [ -f "./android/gradlew" ]; then
-            PROJECT_DIR="$(pwd)/android"
-          else
-            echo "ERROR: gradlew was not found"
-            find . -name "gradlew" -type f -print
-            exit 1
-          fi
-
-          echo "===== PROJECT ====="
+          echo "ANDROID PROJECT:"
           echo "$PROJECT_DIR"
 
-          echo "===== FILES ====="
-          ls -la "$PROJECT_DIR"
+          echo "$PROJECT_DIR" > "$CM_BUILD_DIR/project_dir.txt"
 
-          echo "===== GRADLE FILES ====="
-          test -f "$PROJECT_DIR/gradlew" && echo "gradlew: OK"
-          test -f "$PROJECT_DIR/build.gradle" && echo "build.gradle: OK"
-          test -f "$PROJECT_DIR/settings.gradle" && echo "settings.gradle: OK"
-          test -d "$PROJECT_DIR/gradle/wrapper" && echo "Gradle wrapper: OK"
+          chmod +x "$GRADLEW"
 
-      - name: Make Gradle Executable
+      - name: Configure Android SDK
         script: |
-          echo "===== MAKING GRADLE EXECUTABLE ====="
+          set -e
 
-          if [ -f "./gradlew" ]; then
-            PROJECT_DIR="$(pwd)"
-          elif [ -f "./android/gradlew" ]; then
-            PROJECT_DIR="$(pwd)/android"
-          else
-            echo "ERROR: gradlew was not found"
-            echo "===== SEARCH RESULTS ====="
-            find . -name "gradlew" -type f -print
-            exit 1
-          fi
+          PROJECT_DIR="$(cat "$CM_BUILD_DIR/project_dir.txt")"
 
-          echo "Using Gradle wrapper:"
-          echo "$PROJECT_DIR/gradlew"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$PROJECT_DIR/local.properties"
 
-          chmod +x "$PROJECT_DIR/gradlew"
-
-          if [ ! -x "$PROJECT_DIR/gradlew" ]; then
-            echo "ERROR: gradlew could not be made executable"
-            exit 1
-          fi
-
-          echo "SUCCESS: gradlew is executable"
+          echo "SDK:"
+          cat "$PROJECT_DIR/local.properties"
 
       - name: Check Gradle
         script: |
-          if [ -f "./gradlew" ]; then
-            PROJECT_DIR="$(pwd)"
-          elif [ -f "./android/gradlew" ]; then
-            PROJECT_DIR="$(pwd)/android"
-          else
-            echo "ERROR: gradlew was not found"
-            exit 1
-          fi
+          set -e
+
+          PROJECT_DIR="$(cat "$CM_BUILD_DIR/project_dir.txt")"
 
           cd "$PROJECT_DIR"
 
-          echo "===== GRADLE VERSION ====="
-          ./gradlew --version
+          echo "=== Java ==="
+          java -version
+
+          echo "=== Gradle ==="
+          ./gradlew --version --no-daemon
 
       - name: Clean Project
         script: |
-          if [ -f "./gradlew" ]; then
-            PROJECT_DIR="$(pwd)"
-          elif [ -f "./android/gradlew" ]; then
-            PROJECT_DIR="$(pwd)/android"
-          else
-            echo "ERROR: gradlew was not found"
-            exit 1
-          fi
+          set -e
+
+          PROJECT_DIR="$(cat "$CM_BUILD_DIR/project_dir.txt")"
 
           cd "$PROJECT_DIR"
 
-          echo "===== CLEAN PROJECT ====="
-          ./gradlew clean
+          ./gradlew clean --no-daemon --stacktrace
 
       - name: Build Release APK
         script: |
-          if [ -f "./gradlew" ]; then
-            PROJECT_DIR="$(pwd)"
-          elif [ -f "./android/gradlew" ]; then
-            PROJECT_DIR="$(pwd)/android"
-          else
-            echo "ERROR: gradlew was not found"
-            exit 1
-          fi
+          set -e
+
+          PROJECT_DIR="$(cat "$CM_BUILD_DIR/project_dir.txt")"
 
           cd "$PROJECT_DIR"
 
-          echo "===== BUILD RELEASE APK ====="
-          ./gradlew assembleRelease --stacktrace
+          echo "=== Building APK ==="
+
+          ./gradlew assembleRelease \
+            --no-daemon \
+            --stacktrace
 
     artifacts:
+      - "**/build/outputs/apk/release/*.apk"
       - "**/build/outputs/apk/**/*.apk"
-      - "**/build/outputs/apk/**/*.aab"
+      - "**/build/outputs/**/*.aab"
