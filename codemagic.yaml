@@ -1,11 +1,10 @@
 workflows:
   racing-game-android:
-    name: NexaPay Android
+    name: Racing Game Android
     max_build_duration: 60
 
     environment:
       java: 21
-
       android_signing:
         - nexapay_release
 
@@ -13,143 +12,127 @@ workflows:
 
       - name: Show Environment
         script: |
-          set -e
-
-          echo "========================================"
-          echo "JAVA VERSION"
-          echo "========================================"
-          java -version
-
-          echo ""
-          echo "========================================"
-          echo "JAVA HOME"
-          echo "========================================"
-          echo "$JAVA_HOME"
+          echo "===== CURRENT DIRECTORY ====="
+          pwd
+          echo "===== ROOT FILES ====="
+          ls -la
 
       - name: Find Android Project
         script: |
-          set -e
+          echo "===== SEARCHING FOR GRADLE PROJECT ====="
 
-          echo "========================================"
-          echo "ANDROID PROJECT"
-          echo "========================================"
+          if [ -f "./gradlew" ]; then
+            PROJECT_DIR="$(pwd)"
+          elif [ -f "./android/gradlew" ]; then
+            PROJECT_DIR="$(pwd)/android"
+          else
+            echo "ERROR: gradlew was not found"
+            echo "Searching entire repository..."
+            find . -name "gradlew" -type f -print
+            exit 1
+          fi
 
-          find . -maxdepth 6 -type f \
-            \( -name "gradlew" -o -name "settings.gradle" -o -name "settings.gradle.kts" \) \
-            -print
+          echo "PROJECT_DIR=$PROJECT_DIR"
 
       - name: Check Gradle Files
         script: |
-          set -e
+          if [ -f "./gradlew" ]; then
+            PROJECT_DIR="$(pwd)"
+          elif [ -f "./android/gradlew" ]; then
+            PROJECT_DIR="$(pwd)/android"
+          else
+            echo "ERROR: gradlew was not found"
+            find . -name "gradlew" -type f -print
+            exit 1
+          fi
 
-          echo "========================================"
-          echo "GRADLE FILES"
-          echo "========================================"
+          echo "===== PROJECT ====="
+          echo "$PROJECT_DIR"
 
-          find . -maxdepth 7 -type f \
-            \( -name "gradlew" -o -name "gradle-wrapper.jar" -o -name "gradle-wrapper.properties" \) \
-            -print
+          echo "===== FILES ====="
+          ls -la "$PROJECT_DIR"
+
+          echo "===== GRADLE FILES ====="
+          test -f "$PROJECT_DIR/gradlew" && echo "gradlew: OK"
+          test -f "$PROJECT_DIR/build.gradle" && echo "build.gradle: OK"
+          test -f "$PROJECT_DIR/settings.gradle" && echo "settings.gradle: OK"
+          test -d "$PROJECT_DIR/gradle/wrapper" && echo "Gradle wrapper: OK"
 
       - name: Make Gradle Executable
         script: |
-          set -e
+          echo "===== MAKING GRADLE EXECUTABLE ====="
 
-          GRADLEW=$(find . -type f -name "gradlew" -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found."
+          if [ -f "./gradlew" ]; then
+            PROJECT_DIR="$(pwd)"
+          elif [ -f "./android/gradlew" ]; then
+            PROJECT_DIR="$(pwd)/android"
+          else
+            echo "ERROR: gradlew was not found"
+            echo "===== SEARCH RESULTS ====="
+            find . -name "gradlew" -type f -print
             exit 1
           fi
 
-          echo "Found Gradle Wrapper:"
-          echo "$GRADLEW"
+          echo "Using Gradle wrapper:"
+          echo "$PROJECT_DIR/gradlew"
 
-          chmod +x "$GRADLEW"
+          chmod +x "$PROJECT_DIR/gradlew"
+
+          if [ ! -x "$PROJECT_DIR/gradlew" ]; then
+            echo "ERROR: gradlew could not be made executable"
+            exit 1
+          fi
+
+          echo "SUCCESS: gradlew is executable"
 
       - name: Check Gradle
         script: |
-          set +e
-
-          GRADLEW=$(find . -type f -name "gradlew" -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found."
+          if [ -f "./gradlew" ]; then
+            PROJECT_DIR="$(pwd)"
+          elif [ -f "./android/gradlew" ]; then
+            PROJECT_DIR="$(pwd)/android"
+          else
+            echo "ERROR: gradlew was not found"
             exit 1
           fi
 
-          echo "========================================"
-          echo "GRADLE VERSION"
-          echo "========================================"
+          cd "$PROJECT_DIR"
 
-          "$GRADLEW" --version 2>&1 | tee gradle-version.log
-
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          tail -n 50 gradle-version.log
-
-          echo "Gradle exit code: $EXIT_CODE"
-
-          exit $EXIT_CODE
+          echo "===== GRADLE VERSION ====="
+          ./gradlew --version
 
       - name: Clean Project
         script: |
-          set +e
-
-          GRADLEW=$(find . -type f -name "gradlew" -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found."
+          if [ -f "./gradlew" ]; then
+            PROJECT_DIR="$(pwd)"
+          elif [ -f "./android/gradlew" ]; then
+            PROJECT_DIR="$(pwd)/android"
+          else
+            echo "ERROR: gradlew was not found"
             exit 1
           fi
 
-          chmod +x "$GRADLEW"
+          cd "$PROJECT_DIR"
 
-          "$GRADLEW" clean --stacktrace 2>&1 | tee clean.log
-
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          echo ""
-          echo "========================================"
-          echo "LAST 50 LINES OF CLEAN LOG"
-          echo "========================================"
-
-          tail -n 50 clean.log
-
-          exit $EXIT_CODE
+          echo "===== CLEAN PROJECT ====="
+          ./gradlew clean
 
       - name: Build Release APK
         script: |
-          set +e
-
-          GRADLEW=$(find . -type f -name "gradlew" -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found."
+          if [ -f "./gradlew" ]; then
+            PROJECT_DIR="$(pwd)"
+          elif [ -f "./android/gradlew" ]; then
+            PROJECT_DIR="$(pwd)/android"
+          else
+            echo "ERROR: gradlew was not found"
             exit 1
           fi
 
-          chmod +x "$GRADLEW"
+          cd "$PROJECT_DIR"
 
-          echo "========================================"
-          echo "BUILDING RELEASE APK"
-          echo "========================================"
-
-          "$GRADLEW" assembleRelease --stacktrace 2>&1 | tee build.log
-
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          echo ""
-          echo "========================================"
-          echo "LAST 50 LINES OF BUILD LOG"
-          echo "========================================"
-
-          tail -n 50 build.log
-
-          echo ""
-          echo "BUILD EXIT CODE: $EXIT_CODE"
-
-          exit $EXIT_CODE
+          echo "===== BUILD RELEASE APK ====="
+          ./gradlew assembleRelease --stacktrace
 
     artifacts:
       - "**/build/outputs/apk/**/*.apk"
-      - "**/build/outputs/bundle/**/*.aab"
+      - "**/build/outputs/apk/**/*.aab"
