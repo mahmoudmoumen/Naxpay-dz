@@ -1,13 +1,13 @@
 workflows:
   racing-game-android:
-    name: Racing Game Android
+    name: NexaPay Android
     max_build_duration: 60
 
     environment:
       java: 21
 
       android_signing:
-        - racing_release
+        - nexapay_release
 
     scripts:
 
@@ -34,7 +34,7 @@ workflows:
           echo "ANDROID PROJECT"
           echo "========================================"
 
-          find . -maxdepth 4 -type f \
+          find . -maxdepth 6 -type f \
             \( -name "gradlew" -o -name "settings.gradle" -o -name "settings.gradle.kts" \) \
             -print
 
@@ -46,7 +46,7 @@ workflows:
           echo "GRADLE FILES"
           echo "========================================"
 
-          find . -maxdepth 5 -type f \
+          find . -maxdepth 7 -type f \
             \( -name "gradlew" -o -name "gradle-wrapper.jar" -o -name "gradle-wrapper.properties" \) \
             -print
 
@@ -85,14 +85,8 @@ workflows:
 
           EXIT_CODE=${PIPESTATUS[0]}
 
-          echo ""
-          echo "========================================"
-          echo "LAST 50 LINES"
-          echo "========================================"
-
           tail -n 50 gradle-version.log
 
-          echo ""
           echo "Gradle exit code: $EXIT_CODE"
 
           exit $EXIT_CODE
@@ -123,7 +117,7 @@ workflows:
 
           exit $EXIT_CODE
 
-      - name: Build Release APK - FINAL DIAGNOSTIC
+      - name: Build Release APK
         script: |
           set +e
 
@@ -152,12 +146,10 @@ workflows:
           tail -n 50 build.log
 
           echo ""
-          echo "========================================"
           echo "BUILD EXIT CODE: $EXIT_CODE"
-          echo "========================================"
 
           exit $EXIT_CODE
 
     artifacts:
       - "**/build/outputs/apk/**/*.apk"
-      - "**/build/outputs/apk/**/*.aab"
+      - "**/build/outputs/bundle/**/*.aab"
