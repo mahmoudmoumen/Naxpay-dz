@@ -1,297 +1,163 @@
 workflows:
-  nexarace-release:
-    name: NexaRace Release - Final Diagnostic
+  racing-game-android:
+    name: Racing Game Android
     max_build_duration: 60
-    instance_type: mac_mini_m2
 
     environment:
-      java: 17
+      java: 21
 
       android_signing:
-        - nexapay_release
+        - racing_release
 
     scripts:
 
-      # ==========================================
-      # 1. Extract ZIP
-      # ==========================================
-      - name: Extract NexaRace
-        script: |
-          set -e
-
-          ZIP_FILE="NexaRace_FINAL_ANDROID_CODMATIC_READY.zip"
-
-          echo "========================================"
-          echo "SEARCHING FOR ZIP"
-          echo "========================================"
-
-          if [ ! -f "$ZIP_FILE" ]; then
-            echo "ERROR: ZIP not found:"
-            echo "$ZIP_FILE"
-            echo ""
-            echo "AVAILABLE FILES:"
-            find . -maxdepth 5 -type f | sort
-            exit 1
-          fi
-
-          rm -rf "$CM_BUILD_DIR/extracted"
-
-          mkdir -p "$CM_BUILD_DIR/extracted"
-
-          unzip -q "$ZIP_FILE" \
-            -d "$CM_BUILD_DIR/extracted"
-
-          echo ""
-          echo "========================================"
-          echo "ZIP EXTRACTED"
-          echo "========================================"
-
-          find "$CM_BUILD_DIR/extracted" \
-            -maxdepth 5 \
-            -type f | sort
-
-
-      # ==========================================
-      # 2. Find Gradle Project
-      # ==========================================
-      - name: Find Android Project
-        script: |
-          set -e
-
-          echo "========================================"
-          echo "FINDING ANDROID PROJECT"
-          echo "========================================"
-
-          GRADLEW=$(find "$CM_BUILD_DIR/extracted" \
-            -type f \
-            -name "gradlew" \
-            -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew NOT FOUND"
-
-            find "$CM_BUILD_DIR/extracted" \
-              -maxdepth 12 \
-              -type f | sort
-
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$GRADLEW")
-
-          echo "$PROJECT_DIR" \
-            > "$CM_BUILD_DIR/project_dir.txt"
-
-          chmod +x "$PROJECT_DIR/gradlew"
-
-          echo ""
-          echo "PROJECT DIRECTORY:"
-          echo "$PROJECT_DIR"
-
-          echo ""
-          echo "PROJECT FILES:"
-          find "$PROJECT_DIR" \
-            -maxdepth 3 \
-            -type f | sort
-
-
-      # ==========================================
-      # 3. Configure Android SDK
-      # ==========================================
-      - name: Configure Android SDK
-        script: |
-          set -e
-
-          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
-          echo "========================================"
-          echo "CONFIGURING ANDROID SDK"
-          echo "========================================"
-
-          echo "sdk.dir=$ANDROID_SDK_ROOT" \
-            > "$PROJECT_DIR/local.properties"
-
-          echo ""
-          echo "SDK:"
-          cat "$PROJECT_DIR/local.properties"
-
-
-      # ==========================================
-      # 4. Check Java
-      # ==========================================
-      - name: Check Java
+      - name: Show Environment
         script: |
           set -e
 
           echo "========================================"
           echo "JAVA VERSION"
           echo "========================================"
-
           java -version
 
+          echo ""
+          echo "========================================"
+          echo "JAVA HOME"
+          echo "========================================"
+          echo "$JAVA_HOME"
 
-      # ==========================================
-      # 5. Check Gradle
-      # ==========================================
-      - name: Check Gradle
+      - name: Find Android Project
         script: |
           set -e
 
-          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+          echo "========================================"
+          echo "ANDROID PROJECT"
+          echo "========================================"
 
-          cd "$PROJECT_DIR"
+          find . -maxdepth 4 -type f \
+            \( -name "gradlew" -o -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            -print
+
+      - name: Check Gradle Files
+        script: |
+          set -e
+
+          echo "========================================"
+          echo "GRADLE FILES"
+          echo "========================================"
+
+          find . -maxdepth 5 -type f \
+            \( -name "gradlew" -o -name "gradle-wrapper.jar" -o -name "gradle-wrapper.properties" \) \
+            -print
+
+      - name: Make Gradle Executable
+        script: |
+          set -e
+
+          GRADLEW=$(find . -type f -name "gradlew" -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew was not found."
+            exit 1
+          fi
+
+          echo "Found Gradle Wrapper:"
+          echo "$GRADLEW"
+
+          chmod +x "$GRADLEW"
+
+      - name: Check Gradle
+        script: |
+          set +e
+
+          GRADLEW=$(find . -type f -name "gradlew" -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew was not found."
+            exit 1
+          fi
 
           echo "========================================"
           echo "GRADLE VERSION"
           echo "========================================"
 
-          ./gradlew \
-            --version \
-            --no-daemon
+          "$GRADLEW" --version 2>&1 | tee gradle-version.log
 
+          EXIT_CODE=${PIPESTATUS[0]}
 
-      # ==========================================
-      # 6. Validate Gradle
-      # ==========================================
-      - name: Validate Gradle Project
-        script: |
-          set -e
-
-          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
-          cd "$PROJECT_DIR"
-
+          echo ""
           echo "========================================"
-          echo "VALIDATING GRADLE PROJECT"
+          echo "LAST 50 LINES"
           echo "========================================"
 
-          ./gradlew tasks \
-            --no-daemon \
-            --stacktrace \
-            --console=plain
+          tail -n 50 gradle-version.log
 
+          echo ""
+          echo "Gradle exit code: $EXIT_CODE"
 
-      # ==========================================
-      # 7. Clean
-      # ==========================================
+          exit $EXIT_CODE
+
       - name: Clean Project
         script: |
-          set -e
+          set +e
 
-          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+          GRADLEW=$(find . -type f -name "gradlew" -print -quit)
 
-          cd "$PROJECT_DIR"
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew was not found."
+            exit 1
+          fi
 
+          chmod +x "$GRADLEW"
+
+          "$GRADLEW" clean --stacktrace 2>&1 | tee clean.log
+
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          echo ""
           echo "========================================"
-          echo "CLEAN PROJECT"
+          echo "LAST 50 LINES OF CLEAN LOG"
           echo "========================================"
 
-          ./gradlew clean \
-            --no-daemon \
-            --stacktrace \
-            --console=plain
+          tail -n 50 clean.log
 
+          exit $EXIT_CODE
 
-      # ==========================================
-      # 8. Build Release APK
-      # ==========================================
       - name: Build Release APK - FINAL DIAGNOSTIC
         script: |
           set +e
 
-          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+          GRADLEW=$(find . -type f -name "gradlew" -print -quit)
 
-          cd "$PROJECT_DIR"
-
-          LOG_FILE="$CM_BUILD_DIR/full-build.log"
-
-          echo "========================================"
-          echo "BUILDING NEXARACE RELEASE APK"
-          echo "========================================"
-
-          echo ""
-          echo "PROJECT:"
-          echo "$PROJECT_DIR"
-
-          echo ""
-          echo "JAVA:"
-          java -version
-
-          echo ""
-          echo "STARTING GRADLE..."
-          echo ""
-
-          ./gradlew assembleRelease \
-            --no-daemon \
-            --stacktrace \
-            --info \
-            --console=plain \
-            2>&1 | tee "$LOG_FILE"
-
-          BUILD_EXIT=${PIPESTATUS[0]}
-
-          echo ""
-          echo "========================================"
-          echo "GRADLE EXIT CODE"
-          echo "========================================"
-
-          echo "$BUILD_EXIT"
-
-          echo ""
-          echo "========================================"
-          echo "REAL GRADLE ERROR"
-          echo "========================================"
-
-          grep -n -E \
-            "FAILURE:|What went wrong:|Execution failed for task|Could not resolve|Could not find|AAPT2|Manifest merger failed|Duplicate|error:|Error:|Caused by:|resource .* not found|uses-sdk|minSdk|targetSdk|compileSdk" \
-            "$LOG_FILE" \
-            | tail -n 150 || true
-
-          echo ""
-          echo "========================================"
-          echo "LAST 150 LOG LINES"
-          echo "========================================"
-
-          tail -n 150 "$LOG_FILE"
-
-          echo ""
-          echo "========================================"
-          echo "SEARCHING FOR APK"
-          echo "========================================"
-
-          find "$PROJECT_DIR" \
-            -type f \
-            -path "*/build/outputs/apk/release/*.apk" \
-            -print || true
-
-          echo ""
-          echo "========================================"
-          echo "SEARCHING FOR ALL APK FILES"
-          echo "========================================"
-
-          find "$PROJECT_DIR" \
-            -type f \
-            -name "*.apk" \
-            -print || true
-
-          if [ "$BUILD_EXIT" -ne 0 ]; then
-            echo ""
-            echo "========================================"
-            echo "APK BUILD FAILED"
-            echo "========================================"
-
-            exit "$BUILD_EXIT"
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew was not found."
+            exit 1
           fi
 
+          chmod +x "$GRADLEW"
+
+          echo "========================================"
+          echo "BUILDING RELEASE APK"
+          echo "========================================"
+
+          "$GRADLEW" assembleRelease --stacktrace 2>&1 | tee build.log
+
+          EXIT_CODE=${PIPESTATUS[0]}
+
           echo ""
           echo "========================================"
-          echo "APK BUILD SUCCESS"
+          echo "LAST 50 LINES OF BUILD LOG"
           echo "========================================"
 
+          tail -n 50 build.log
 
-    # ==========================================
-    # 9. Artifacts
-    # ==========================================
+          echo ""
+          echo "========================================"
+          echo "BUILD EXIT CODE: $EXIT_CODE"
+          echo "========================================"
+
+          exit $EXIT_CODE
+
     artifacts:
-      - "**/build/outputs/apk/release/*.apk"
-      - "$CM_BUILD_DIR/full-build.log"
+      - "**/build/outputs/apk/**/*.apk"
+      - "**/build/outputs/apk/**/*.aab"
