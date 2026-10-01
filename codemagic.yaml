@@ -5,16 +5,13 @@ workflows:
     instance_type: mac_mini_m2
 
     environment:
-      java: 17
+      java: 21
 
       android_signing:
         - nexapay_release
 
     scripts:
 
-      # ==========================================
-      # 1. Extract NexaRace ZIP
-      # ==========================================
       - name: Extract NexaRace
         script: |
           set -e
@@ -24,7 +21,7 @@ workflows:
           if [ ! -f "$ZIP_FILE" ]; then
             echo "ERROR: ZIP not found: $ZIP_FILE"
             echo ""
-            echo "Files available in repository:"
+            echo "Files available:"
             find . -maxdepth 3 -type f | sort
             exit 1
           fi
@@ -34,7 +31,6 @@ workflows:
 
           unzip -q "$ZIP_FILE" -d "$CM_BUILD_DIR/extracted"
 
-          echo ""
           echo "========================================"
           echo "ZIP EXTRACTED SUCCESSFULLY"
           echo "========================================"
@@ -48,14 +44,9 @@ workflows:
             -print
 
 
-      # ==========================================
-      # 2. Find Android Project
-      # ==========================================
       - name: Find Android Project
         script: |
           set -e
-
-          echo "Searching for Gradle wrapper..."
 
           GRADLEW=$(find "$CM_BUILD_DIR/extracted" \
             -type f \
@@ -63,14 +54,10 @@ workflows:
             -print -quit)
 
           if [ -z "$GRADLEW" ]; then
-            echo ""
-            echo "ERROR: gradlew was not found anywhere in the ZIP."
-            echo ""
-            echo "ZIP CONTENT:"
+            echo "ERROR: gradlew was not found."
             find "$CM_BUILD_DIR/extracted" \
               -maxdepth 10 \
-              -type f \
-              | sort
+              -type f | sort
             exit 1
           fi
 
@@ -80,46 +67,12 @@ workflows:
 
           chmod +x "$PROJECT_DIR/gradlew"
 
-          echo ""
           echo "========================================"
           echo "ANDROID PROJECT FOUND"
           echo "========================================"
-          echo "Project directory:"
           echo "$PROJECT_DIR"
-          echo ""
-          echo "Gradle wrapper:"
-          echo "$PROJECT_DIR/gradlew"
 
 
-      # ==========================================
-      # 3. Check Android Project
-      # ==========================================
-      - name: Check Android Project
-        script: |
-          set -e
-
-          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
-          cd "$PROJECT_DIR"
-
-          echo ""
-          echo "========================================"
-          echo "ANDROID PROJECT FILES"
-          echo "========================================"
-
-          ls -la
-
-          echo ""
-          echo "========================================"
-          echo "GRADLE VERSION"
-          echo "========================================"
-
-          ./gradlew --version
-
-
-      # ==========================================
-      # 4. Configure Android SDK
-      # ==========================================
       - name: Configure Android SDK
         script: |
           set -e
@@ -132,9 +85,28 @@ workflows:
           echo "Android SDK configured."
 
 
-      # ==========================================
-      # 5. Validate Gradle Project
-      # ==========================================
+      - name: Check Android Project
+        script: |
+          set -e
+
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
+
+          cd "$PROJECT_DIR"
+
+          echo "========================================"
+          echo "JAVA VERSION"
+          echo "========================================"
+
+          java -version
+
+          echo ""
+          echo "========================================"
+          echo "GRADLE VERSION"
+          echo "========================================"
+
+          ./gradlew --version
+
+
       - name: Validate Gradle Project
         script: |
           set -e
@@ -143,19 +115,11 @@ workflows:
 
           cd "$PROJECT_DIR"
 
-          echo ""
-          echo "========================================"
-          echo "VALIDATING GRADLE PROJECT"
-          echo "========================================"
-
           ./gradlew tasks \
             --no-daemon \
             --stacktrace
 
 
-      # ==========================================
-      # 6. Clean Project
-      # ==========================================
       - name: Clean Project
         script: |
           set -e
@@ -164,19 +128,11 @@ workflows:
 
           cd "$PROJECT_DIR"
 
-          echo ""
-          echo "========================================"
-          echo "CLEANING PROJECT"
-          echo "========================================"
-
           ./gradlew clean \
             --no-daemon \
             --stacktrace
 
 
-      # ==========================================
-      # 7. Build Release APK
-      # ==========================================
       - name: Build Release APK
         script: |
           set -e
@@ -185,7 +141,6 @@ workflows:
 
           cd "$PROJECT_DIR"
 
-          echo ""
           echo "========================================"
           echo "BUILDING NEXARACE RELEASE APK"
           echo "========================================"
@@ -205,9 +160,6 @@ workflows:
             -print
 
 
-      # ==========================================
-      # 8. Build Release AAB
-      # ==========================================
       - name: Build Release AAB
         script: |
           set -e
@@ -216,7 +168,6 @@ workflows:
 
           cd "$PROJECT_DIR"
 
-          echo ""
           echo "========================================"
           echo "BUILDING NEXARACE RELEASE AAB"
           echo "========================================"
@@ -236,9 +187,6 @@ workflows:
             -print
 
 
-    # ==========================================
-    # 9. Artifacts
-    # ==========================================
     artifacts:
       - "**/build/outputs/apk/release/*.apk"
       - "**/build/outputs/bundle/release/*.aab"
