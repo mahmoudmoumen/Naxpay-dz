@@ -1,6 +1,6 @@
 workflows:
   nexarace-release:
-    name: NexaRace Release
+    name: NexaRace Release - Diagnostic
     max_build_duration: 60
     instance_type: mac_mini_m2
 
@@ -18,10 +18,15 @@ workflows:
 
           ZIP_FILE="NexaRace_FINAL_ANDROID_CODMATIC_READY.zip"
 
+          echo "========================================"
+          echo "SEARCHING FOR ZIP"
+          echo "========================================"
+
           if [ ! -f "$ZIP_FILE" ]; then
             echo "ERROR: ZIP not found: $ZIP_FILE"
-            echo "Available files:"
-            find . -maxdepth 3 -type f | sort
+            echo ""
+            echo "AVAILABLE FILES:"
+            find . -maxdepth 4 -type f | sort
             exit 1
           fi
 
@@ -30,21 +35,30 @@ workflows:
 
           unzip -q "$ZIP_FILE" -d "$CM_BUILD_DIR/extracted"
 
+          echo ""
           echo "========================================"
-          echo "ZIP EXTRACTED SUCCESSFULLY"
+          echo "ZIP EXTRACTED"
           echo "========================================"
 
           find "$CM_BUILD_DIR/extracted" \
             -type f \
-            \( -name "gradlew" \
-            -o -name "settings.gradle" \
-            -o -name "settings.gradle.kts" \) \
+            \( \
+              -name "gradlew" \
+              -o -name "settings.gradle" \
+              -o -name "settings.gradle.kts" \
+              -o -name "build.gradle" \
+              -o -name "build.gradle.kts" \
+            \) \
             -print
 
 
       - name: Find Android Project
         script: |
           set -e
+
+          echo "========================================"
+          echo "FINDING GRADLE PROJECT"
+          echo "========================================"
 
           GRADLEW=$(find "$CM_BUILD_DIR/extracted" \
             -type f \
@@ -55,7 +69,7 @@ workflows:
             echo "ERROR: gradlew was not found."
 
             find "$CM_BUILD_DIR/extracted" \
-              -maxdepth 10 \
+              -maxdepth 12 \
               -type f | sort
 
             exit 1
@@ -67,10 +81,14 @@ workflows:
 
           chmod +x "$PROJECT_DIR/gradlew"
 
-          echo "========================================"
-          echo "ANDROID PROJECT FOUND"
-          echo "========================================"
+          echo "PROJECT DIRECTORY:"
           echo "$PROJECT_DIR"
+
+          echo ""
+          echo "PROJECT FILES:"
+          find "$PROJECT_DIR" \
+            -maxdepth 3 \
+            -type f | sort
 
 
       - name: Configure Android SDK
@@ -79,10 +97,15 @@ workflows:
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
+          echo "========================================"
+          echo "CONFIGURING ANDROID SDK"
+          echo "========================================"
+
           echo "sdk.dir=$ANDROID_SDK_ROOT" \
             > "$PROJECT_DIR/local.properties"
 
-          echo "Android SDK configured."
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "SDK configured successfully."
 
 
       - name: Check Android Project
@@ -116,6 +139,10 @@ workflows:
 
           cd "$PROJECT_DIR"
 
+          echo "========================================"
+          echo "VALIDATING GRADLE PROJECT"
+          echo "========================================"
+
           ./gradlew tasks \
             --no-daemon \
             --stacktrace
@@ -129,38 +156,97 @@ workflows:
 
           cd "$PROJECT_DIR"
 
+          echo "========================================"
+          echo "CLEANING PROJECT"
+          echo "========================================"
+
           ./gradlew clean \
             --no-daemon \
             --stacktrace
 
 
-      - name: Build Release APK
+      - name: Build Release APK - DIAGNOSTIC
         script: |
-          set -e
+          set -u
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
           cd "$PROJECT_DIR"
 
+          LOG_FILE="$CM_BUILD_DIR/assemble-release.log"
+
           echo "========================================"
           echo "BUILDING NEXARACE RELEASE APK"
           echo "========================================"
 
+          echo "Project:"
+          echo "$PROJECT_DIR"
+
+          echo ""
+          echo "Java:"
+          java -version
+
+          echo ""
+          echo "Starting Gradle assembleRelease..."
+          echo ""
+
+          set +e
+
           ./gradlew assembleRelease \
             --no-daemon \
             --stacktrace \
-            --info
+            --info \
+            2>&1 | tee "$LOG_FILE"
+
+          BUILD_EXIT=${PIPESTATUS[0]}
+
+          echo ""
+          echo "========================================"
+          echo "GRADLE EXIT CODE"
+          echo "========================================"
+          echo "$BUILD_EXIT"
+
+          echo ""
+          echo "========================================"
+          echo "IMPORTANT ERROR LINES"
+          echo "========================================"
+
+          grep -E \
+            "FAILURE:|What went wrong:|Execution failed for task|error:|Error:|Caused by:|AAPT2|Manifest merger failed|Duplicate|Could not resolve|Could not find|SDK|resource .* not found|uses-sdk|minSdk|targetSdk|compileSdk" \
+            "$LOG_FILE" \
+            | tail -n 150 || true
+
+          echo ""
+          echo "========================================"
+          echo "LAST 100 LOG LINES"
+          echo "========================================"
+
+          tail -n 100 "$LOG_FILE"
+
+          echo ""
+          echo "========================================"
+          echo "APK FILES FOUND"
+          echo "========================================"
+
+          find "$PROJECT_DIR" \
+            -type f \
+            -path "*/build/outputs/apk/release/*.apk" \
+            -print || true
+
+          if [ "$BUILD_EXIT" -ne 0 ]; then
+            echo ""
+            echo "========================================"
+            echo "APK BUILD FAILED"
+            echo "========================================"
+            exit "$BUILD_EXIT"
+          fi
 
           echo ""
           echo "========================================"
           echo "APK BUILD SUCCESS"
           echo "========================================"
 
-          find "$PROJECT_DIR" \
-            -type f \
-            -path "*/build/outputs/apk/release/*.apk" \
-            -print
-
 
     artifacts:
       - "**/build/outputs/apk/release/*.apk"
+      - "$CM_BUILD_DIR/assemble-release.log"
