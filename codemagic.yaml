@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m2
 
     environment:
-      java: 21
+      java: 17
 
       android_signing:
         - nexapay_release
@@ -20,8 +20,6 @@ workflows:
 
           if [ ! -f "$ZIP_FILE" ]; then
             echo "ERROR: ZIP not found: $ZIP_FILE"
-            echo ""
-            echo "Files available:"
             find . -maxdepth 3 -type f | sort
             exit 1
           fi
@@ -31,12 +29,9 @@ workflows:
 
           unzip -q "$ZIP_FILE" -d "$CM_BUILD_DIR/extracted"
 
-          echo "========================================"
-          echo "ZIP EXTRACTED SUCCESSFULLY"
-          echo "========================================"
+          echo "ZIP extracted successfully"
 
           find "$CM_BUILD_DIR/extracted" \
-            -maxdepth 8 \
             -type f \
             \( -name "gradlew" \
             -o -name "settings.gradle" \
@@ -54,10 +49,8 @@ workflows:
             -print -quit)
 
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found."
-            find "$CM_BUILD_DIR/extracted" \
-              -maxdepth 10 \
-              -type f | sort
+            echo "ERROR: gradlew was not found"
+            find "$CM_BUILD_DIR/extracted" -maxdepth 10 -type f | sort
             exit 1
           fi
 
@@ -67,9 +60,7 @@ workflows:
 
           chmod +x "$PROJECT_DIR/gradlew"
 
-          echo "========================================"
-          echo "ANDROID PROJECT FOUND"
-          echo "========================================"
+          echo "ANDROID PROJECT:"
           echo "$PROJECT_DIR"
 
 
@@ -79,10 +70,9 @@ workflows:
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
 
-          echo "sdk.dir=$ANDROID_SDK_ROOT" \
-            > "$PROJECT_DIR/local.properties"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$PROJECT_DIR/local.properties"
 
-          echo "Android SDK configured."
+          echo "Android SDK configured"
 
 
       - name: Check Android Project
@@ -90,20 +80,12 @@ workflows:
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
           cd "$PROJECT_DIR"
 
-          echo "========================================"
-          echo "JAVA VERSION"
-          echo "========================================"
-
+          echo "===== JAVA ====="
           java -version
 
-          echo ""
-          echo "========================================"
-          echo "GRADLE VERSION"
-          echo "========================================"
-
+          echo "===== GRADLE ====="
           ./gradlew --version
 
 
@@ -112,7 +94,6 @@ workflows:
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
           cd "$PROJECT_DIR"
 
           ./gradlew tasks \
@@ -125,7 +106,6 @@ workflows:
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
           cd "$PROJECT_DIR"
 
           ./gradlew clean \
@@ -138,7 +118,6 @@ workflows:
           set -e
 
           PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
           cd "$PROJECT_DIR"
 
           echo "========================================"
@@ -147,46 +126,18 @@ workflows:
 
           ./gradlew assembleRelease \
             --no-daemon \
-            --stacktrace
+            --stacktrace \
+            --info
 
-          echo ""
           echo "========================================"
           echo "APK BUILD SUCCESS"
           echo "========================================"
 
-          find "$PROJECT_DIR" \
+          find . \
             -type f \
             -path "*/build/outputs/apk/release/*.apk" \
             -print
 
 
-      - name: Build Release AAB
-        script: |
-          set -e
-
-          PROJECT_DIR=$(cat "$CM_BUILD_DIR/project_dir.txt")
-
-          cd "$PROJECT_DIR"
-
-          echo "========================================"
-          echo "BUILDING NEXARACE RELEASE AAB"
-          echo "========================================"
-
-          ./gradlew bundleRelease \
-            --no-daemon \
-            --stacktrace
-
-          echo ""
-          echo "========================================"
-          echo "AAB BUILD SUCCESS"
-          echo "========================================"
-
-          find "$PROJECT_DIR" \
-            -type f \
-            -path "*/build/outputs/bundle/release/*.aab" \
-            -print
-
-
     artifacts:
       - "**/build/outputs/apk/release/*.apk"
-      - "**/build/outputs/bundle/release/*.aab"
